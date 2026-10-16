@@ -12,6 +12,7 @@ import pytest
 
 from application.services.backup_service import BackupService
 from application.services.dashboard_service import DashboardService
+from application.services.forecast_service import ForecastService
 from application.services.import_export_service import ImportExportService
 from application.services.inventory_service import InventoryService
 from application.services.product_service import ProductService
@@ -19,6 +20,7 @@ from application.services.sales_service import SalesService
 from application.services.supplier_service import SupplierService
 from repositories.sqlite.audit_repository import SqliteAuditRepository
 from repositories.sqlite.connection import DatabaseConnection
+from repositories.sqlite.forecast_repository import SqliteForecastRepository
 from repositories.sqlite.inventory_repository import SqliteInventoryRepository
 from repositories.sqlite.product_repository import SqliteProductRepository
 from repositories.sqlite.sales_repository import SqliteSalesRepository
@@ -37,6 +39,7 @@ def ctx(tmp_path):
     suppliers = SqliteSupplierRepository(db)
     inventory_repo = SqliteInventoryRepository(db)
     sales_repo = SqliteSalesRepository(db)
+    forecast_repo = SqliteForecastRepository(db)
     audit = SqliteAuditRepository(db)
     settings = SqliteSettingsRepository(db)
 
@@ -48,6 +51,7 @@ def ctx(tmp_path):
         products, sales_repo, product_service, inventory_service,
         sales_service, supplier_service, audit,
     )
+    forecast_service = ForecastService(db, forecast_repo, products, settings)
 
     return SimpleNamespace(
         db=db,
@@ -55,6 +59,7 @@ def ctx(tmp_path):
         suppliers=suppliers,
         inventory_repo=inventory_repo,
         sales_repo=sales_repo,
+        forecast_repo=forecast_repo,
         audit=audit,
         settings=settings,
         product_service=product_service,
@@ -62,6 +67,7 @@ def ctx(tmp_path):
         inventory_service=inventory_service,
         sales_service=sales_service,
         import_export_service=import_export_service,
+        forecast_service=forecast_service,
         backup_service=BackupService(db),
         dashboard_service=DashboardService(product_service, inventory_service, sales_repo),
     )

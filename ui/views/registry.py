@@ -12,6 +12,7 @@ import flet as ft
 
 from ui.views.dashboard_view import build_dashboard_view
 from ui.views.expiry_view import build_expiry_view
+from ui.views.forecasting_view import build_forecasting_view
 from ui.views.import_export_view import build_import_export_view
 from ui.views.inventory_view import build_inventory_view
 from ui.views.placeholder_views import build_placeholder_view
@@ -38,6 +39,7 @@ VIEW_BUILDERS: dict[str, Callable[[ft.Page, Callable[[str], None]], ft.Control]]
     "/": build_dashboard_view,
     "/inventory": build_inventory_view,
     "/sales": build_sales_view,
+    "/forecasting": build_forecasting_view,
     "/expiry": build_expiry_view,
     "/suppliers": build_suppliers_view,
     "/reports": build_import_export_view,

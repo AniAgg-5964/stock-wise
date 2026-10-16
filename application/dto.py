@@ -66,6 +66,53 @@ class ProductStock:
 
 
 @dataclass
+class ForecastPoint:
+    """One forecast day for a product."""
+
+    target_date: str
+    predicted_qty: float
+    lower_bound: float | None = None
+    upper_bound: float | None = None
+
+
+@dataclass
+class ForecastMetrics:
+    """Accuracy metrics for one forecasting method."""
+
+    method: str
+    label: str
+    mae: float = 0.0
+    rmse: float = 0.0
+    wape: float | None = None
+    bias: float = 0.0
+    n: int = 0
+
+
+@dataclass
+class ForecastResult:
+    """A generated forecast plus the context the UI needs to explain it."""
+
+    product_id: int
+    product_name: str
+    horizon: int
+    method: str
+    method_label: str
+    generated_at: str | None = None
+    is_baseline: bool = True
+    fallback_used: bool = False
+    insufficient_data: bool = False
+    average_daily_demand: float = 0.0
+    observed_days: int = 0
+    residual_std: float = 0.0
+    note: str = ""
+    points: list[ForecastPoint] = field(default_factory=list)
+
+    @property
+    def total_qty(self) -> float:
+        return sum(p.predicted_qty for p in self.points)
+
+
+@dataclass
 class DashboardStats:
     """Real, database-derived dashboard metrics (never fabricated)."""
 
