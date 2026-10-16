@@ -103,9 +103,44 @@ def main(page: ft.Page) -> None:
             ),
         )
 
+    def build_error_view(route: str, exc: Exception) -> ft.Control:
+        """Friendly, recoverable fallback when a single screen fails to build."""
+        return ft.Column(
+            spacing=T.GAP,
+            controls=[
+                ft.Container(
+                    padding=T.CARD_PADDING,
+                    bgcolor=T.BG_CARD,
+                    border_radius=T.RADIUS,
+                    border=ft.Border.all(1, T.STATUS_CRITICAL),
+                    content=ft.Column(spacing=T.GAP_SMALL, controls=[
+                        ft.Row(spacing=8, controls=[
+                            ft.Icon(ft.Icons.ERROR_OUTLINE, color=T.STATUS_CRITICAL, size=20),
+                            ft.Text("This screen could not be loaded", size=T.FONT_SUBTITLE,
+                                    weight=ft.FontWeight.W_600, color=T.TEXT_PRIMARY),
+                        ]),
+                        ft.Text(f"Route '{route}' failed: {exc}", size=T.FONT_SMALL,
+                                color=T.TEXT_SECONDARY, selectable=True),
+                        ft.Text("Your data is safe. Try another screen, or press Retry.",
+                                size=T.FONT_SMALL, color=T.TEXT_TERTIARY),
+                        ft.Row(spacing=T.GAP_SMALL, controls=[
+                            ft.Button(content="Go to Dashboard", icon=ft.Icons.DASHBOARD_OUTLINED,
+                                      on_click=lambda e: navigate("/")),
+                            ft.OutlinedButton(content="Retry", icon=ft.Icons.REFRESH,
+                                              on_click=lambda e: render()),
+                        ]),
+                    ]),
+                ),
+            ],
+        )
+
     def render() -> None:
         page.controls.clear()
-        content = build_view(state["route"], page, navigate)
+        try:
+            content = build_view(state["route"], page, navigate)
+        except Exception as exc:  # one broken screen must never break navigation
+            logger.exception("Failed to build view for %s", state["route"])
+            content = build_error_view(state["route"], exc)
         right_panel = ft.Column(
             expand=True,
             spacing=0,
