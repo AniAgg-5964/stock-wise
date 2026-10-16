@@ -47,6 +47,14 @@ data/
 *.log
 logs/
 
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Flet
+.flet/
+
 # Extracted images (temp)
 extracted_images/
 

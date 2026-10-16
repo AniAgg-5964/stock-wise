@@ -1,0 +1,1 @@
+"""StockWise acceptance tests."""

@@ -1,0 +1,48 @@
+[project]
+name = "stockwise"
+version = "0.1.0"
+description = "Desktop-first inventory decision-support tool for small retailers"
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "flet==1.0.4",
+    "pandas==3.0.6",
+    "numpy==2.5.4",
+    "xgboost==3.4.1",
+    "scikit-learn==1.9.1",
+    "openpyxl==3.1.5",
+    "python-dotenv==1.2.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.1.1",
+    "pytest-cov==7.1.0",
+    "pyinstaller==6.22.3",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = [
+    "app*",
+    "application*",
+    "domain*",
+    "repositories*",
+    "ui*",
+    "ml*",
+    "integrations*",
+    "imports*",
+]
+exclude = ["tests*", "scripts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.coverage.run]
+source = ["app", "application", "domain", "repositories", "ml", "integrations"]
+omit = ["tests/*", "scripts/*"]
