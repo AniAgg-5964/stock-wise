@@ -119,3 +119,17 @@ class ModelService:
         summary["artifact_path"] = str(self.model_dir)
         summary["adopted_by_holdout"] = bool(result.adopted)
         return summary
+
+    # -------------------------------------------------------------------- admin
+    def reset(self) -> bool:
+        """Delete the persisted artifact so forecasting falls back to baselines."""
+        removed = False
+        for name in (artifacts.MODEL_FILENAME, artifacts.METADATA_FILENAME):
+            path = self.model_dir / name
+            if path.exists():
+                try:
+                    path.unlink()
+                    removed = True
+                except OSError as exc:  # pragma: no cover - filesystem
+                    logger.warning("Could not remove %s: %s", path, exc)
+        return removed

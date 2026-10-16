@@ -22,6 +22,7 @@ NAV_ITEMS: list[tuple[str, str, str]] = [
     ("/expiry", "Expiry Management", ft.Icons.EVENT_BUSY_OUTLINED),
     ("/suppliers", "Supplier Research", ft.Icons.STOREFRONT_OUTLINED),
     ("/reports", "Reports", ft.Icons.BAR_CHART_OUTLINED),
+    ("/data", "Data & Imports", ft.Icons.SWAP_VERT),
     ("/settings", "Settings", ft.Icons.SETTINGS_OUTLINED),
 ]
 

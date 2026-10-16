@@ -35,6 +35,8 @@ def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Co
                                          value=settings.get("safety_buffer_days", "2"), width=150),
         "near_expiry_window_days": text_field("Near-expiry window (days)",
                                               value=settings.get("near_expiry_window_days", "7"), width=150),
+        "purchase_budget": text_field("Purchase budget (\u20b9, blank = none)",
+                                      value=settings.get("purchase_budget", ""), width=220),
     }
 
     def save(e) -> None:
@@ -49,8 +51,9 @@ def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Co
             ft.Row(spacing=T.GAP_SMALL, wrap=True, controls=[
                 fields["forecast_horizon_days"], fields["review_period_days"],
                 fields["safety_buffer_days"], fields["near_expiry_window_days"],
+                fields["purchase_budget"],
             ]),
-            ft.Text("These preferences apply to forecasting and reorder logic in later stages.",
+            ft.Text("These preferences drive forecasting, reorder recommendations and expiry alerts.",
                     size=T.FONT_TINY, color=T.TEXT_TERTIARY),
             ft.Button(content="Save settings", icon=ft.Icons.SAVE_OUTLINED, on_click=save),
         ]),
@@ -83,6 +86,46 @@ def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Co
         subtitle=f"Saved to {Config.BACKUP_DIR}",
     )
 
+    model = app.forecast_service.model_status()
+
+    def train_model(e) -> None:
+        try:
+            summary = app.forecast_service.train_model()
+            notify(page, f"Trained {summary['version']} \u00b7 adopted={summary.get('adopted')}", "success")
+            navigate("/settings")
+        except Exception as exc:  # pragma: no cover - training errors
+            notify_error(page, exc)
+
+    def reset_model(e) -> None:
+        try:
+            app.model_service.reset()
+            notify(page, "Model removed \u2014 baseline forecasts are in use", "success")
+            navigate("/settings")
+        except Exception as exc:  # pragma: no cover - filesystem
+            notify_error(page, exc)
+
+    model_metrics = model.get("metrics") or {}
+    wape = model_metrics.get("wape")
+    model_panel = section(
+        "Forecast model",
+        ft.Column(spacing=T.GAP_SMALL, controls=[
+            _kv("Status", "Adopted" if model.get("adopted") else
+                ("Candidate (not adopted)" if model.get("artifact_present") else "No trained model")),
+            _kv("Version", model.get("version") or "\u2014"),
+            _kv("Holdout WAPE", f"{wape:.1%}" if isinstance(wape, (int, float)) else "\u2014"),
+            _kv("Model folder", model.get("model_dir") or str(Config.MODEL_DIR)),
+            ft.Text("Forecasts honestly fall back to the baseline whenever the model is "
+                    "missing, worse than the baseline, or incompatible.",
+                    size=T.FONT_TINY, color=T.TEXT_TERTIARY),
+            ft.Row(spacing=T.GAP_SMALL, controls=[
+                ft.Button(content="Train model", icon=ft.Icons.MODEL_TRAINING, on_click=train_model),
+                ft.OutlinedButton(content="Remove model", icon=ft.Icons.DELETE_OUTLINE, on_click=reset_model),
+            ]),
+        ]),
+        subtitle="XGBoost, trained locally on your own demand history",
+        expand=True,
+    )
+
     movement_count = app.db.query_one("SELECT COUNT(*) AS n FROM stock_movements")["n"]
     sales_count = app.db.query_one("SELECT COUNT(*) AS n FROM sales")["n"]
     diagnostics_panel = section(
@@ -96,13 +139,15 @@ def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Co
             _kv("Sales recorded", str(sales_count)),
             _kv("TinyFish configured", "Yes" if Config.TINYFISH_API_KEY else "No (optional)"),
         ]),
+        expand=True,
     )
 
     return scroll_column([
-        page_header("Settings", "Preferences, backups and diagnostics"),
+        page_header("Settings", "Preferences, model, backups and diagnostics"),
         store_panel,
-        ft.Row(spacing=T.GAP, controls=[backup_panel, diagnostics_panel],
+        ft.Row(spacing=T.GAP, controls=[model_panel, diagnostics_panel],
                vertical_alignment=ft.CrossAxisAlignment.START),
+        backup_panel,
     ])
 
 

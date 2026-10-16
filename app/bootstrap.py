@@ -28,6 +28,7 @@ from application.services.inventory_service import InventoryService
 from application.services.model_service import ModelService
 from application.services.product_service import ProductService
 from application.services.reorder_service import ReorderService
+from application.services.report_service import ReportService
 from application.services.sales_service import SalesService
 from application.services.supplier_service import SupplierService
 from repositories.sqlite.audit_repository import SqliteAuditRepository
@@ -74,6 +75,9 @@ def build_context(db: DatabaseConnection) -> SimpleNamespace:
         purchase_orders, reorder_repo, settings, audit,
     )
     alert_service = AlertsService(products, inventory_service, forecast_service, settings)
+    report_service = ReportService(
+        db, product_service, inventory_service, forecast_service, purchase_orders, products
+    )
 
     return SimpleNamespace(
         db=db,
@@ -95,6 +99,7 @@ def build_context(db: DatabaseConnection) -> SimpleNamespace:
         reorder_repo=reorder_repo,
         reorder_service=reorder_service,
         alert_service=alert_service,
+        report_service=report_service,
         backup_service=BackupService(db),
         dashboard_service=DashboardService(product_service, inventory_service, sales_repo),
     )

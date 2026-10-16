@@ -18,6 +18,7 @@ from ui.views.inventory_view import build_inventory_view
 from ui.views.placeholder_views import build_placeholder_view
 from ui.views.product_detail_view import build_product_detail_view
 from ui.views.reorder_view import build_reorder_view
+from ui.views.reports_view import build_reports_view
 from ui.views.sales_view import build_sales_view
 from ui.views.settings_view import build_settings_view
 from ui.views.suppliers_view import build_suppliers_view
@@ -31,7 +32,8 @@ VIEW_META: dict[str, tuple[str, str, str]] = {
     "/reorder": ("Reorder Center", "Review replenishment recommendations.", ft.Icons.SHOPPING_CART_CHECKOUT_OUTLINED),
     "/expiry": ("Expiry Management", "Track batches by expiry and at-risk quantities.", ft.Icons.EVENT_BUSY_OUTLINED),
     "/suppliers": ("Supplier Research", "Research and verify supplier information.", ft.Icons.STOREFRONT_OUTLINED),
-    "/reports": ("Reports", "Export sales, stock, forecast and purchasing reports.", ft.Icons.BAR_CHART_OUTLINED),
+    "/reports": ("Reports", "Sales, stock, forecast and purchasing reports.", ft.Icons.BAR_CHART_OUTLINED),
+    "/data": ("Data & Imports", "Import and export CSV data with validation.", ft.Icons.SWAP_VERT),
     "/settings": ("Settings", "Store, currency, alert policy, backup and diagnostics.", ft.Icons.SETTINGS_OUTLINED),
 }
 
@@ -44,7 +46,8 @@ VIEW_BUILDERS: dict[str, Callable[[ft.Page, Callable[[str], None]], ft.Control]]
     "/reorder": build_reorder_view,
     "/expiry": build_expiry_view,
     "/suppliers": build_suppliers_view,
-    "/reports": build_import_export_view,
+    "/reports": build_reports_view,
+    "/data": build_import_export_view,
     "/settings": build_settings_view,
 }
 
