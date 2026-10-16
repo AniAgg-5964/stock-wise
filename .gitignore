@@ -1,0 +1,57 @@
+# Virtual environment
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Distribution
+dist/
+build/
+*.egg-info/
+*.egg
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# ML artifacts (large model files)
+ml/artifacts/*.bin
+ml/artifacts/*.json
+!ml/artifacts/.gitkeep
+
+# Data files (development only)
+data/
+*.csv
+!assets/demo_calendar.csv
+!imports/templates/*.csv
+
+# Logs
+*.log
+logs/
+
+# Extracted images (temp)
+extracted_images/
+
+# Temp doc output
+docx_output_*.txt
+
+# PyInstaller
+*.spec
