@@ -81,7 +81,9 @@ def _nav_item(route: str, label: str, icon: str, current_route: str, on_navigate
 
 def build_sidebar(page: ft.Page, current_route: str, on_navigate: Callable[[str], None]) -> ft.Control:
     """Build the persistent left sidebar."""
-    items = [_nav_item(route, label, icon, current_route, on_navigate) for route, label, icon in NAV_ITEMS]
+    # Product detail pages keep "Inventory" highlighted.
+    effective_route = "/inventory" if current_route.startswith("/product/") else current_route
+    items = [_nav_item(route, label, icon, effective_route, on_navigate) for route, label, icon in NAV_ITEMS]
     return ft.Container(
         width=T.SIDEBAR_WIDTH,
         bgcolor=T.BG_DARK,

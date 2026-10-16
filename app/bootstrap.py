@@ -4,21 +4,75 @@ Wires the shared application state on startup:
 1. Create directories
 2. Set up logging
 3. Initialise the database + schema
-4. (Phase 2) Construct repositories and services
+4. Construct repositories and services
 
-The ``app_context`` singleton is created once and shared by the UI.
+The ``app_context`` singleton is created once and shared by the UI, which reads
+services from it and never touches repositories or SQL directly.
+
+``build_context`` is the single wiring factory; the seed script reuses it.
 """
 
 from __future__ import annotations
 
 import logging
+from types import SimpleNamespace
 
 from app.config import Config
 from app.logging_config import setup_logging
+from application.services.backup_service import BackupService
+from application.services.dashboard_service import DashboardService
+from application.services.import_export_service import ImportExportService
+from application.services.inventory_service import InventoryService
+from application.services.product_service import ProductService
+from application.services.sales_service import SalesService
+from application.services.supplier_service import SupplierService
+from repositories.sqlite.audit_repository import SqliteAuditRepository
 from repositories.sqlite.connection import DatabaseConnection
-from repositories.sqlite.schema import initialize_database
+from repositories.sqlite.inventory_repository import SqliteInventoryRepository
+from repositories.sqlite.product_repository import SqliteProductRepository
+from repositories.sqlite.sales_repository import SqliteSalesRepository
+from repositories.sqlite.settings_repository import SqliteSettingsRepository
+from repositories.sqlite.supplier_repository import SqliteSupplierRepository
 
 logger = logging.getLogger(__name__)
+
+
+def build_context(db: DatabaseConnection) -> SimpleNamespace:
+    """Construct the full repository + service graph for a database connection."""
+    # Repositories
+    products = SqliteProductRepository(db)
+    suppliers = SqliteSupplierRepository(db)
+    inventory_repo = SqliteInventoryRepository(db)
+    sales_repo = SqliteSalesRepository(db)
+    audit = SqliteAuditRepository(db)
+    settings = SqliteSettingsRepository(db)
+
+    # Services
+    product_service = ProductService(products, audit)
+    supplier_service = SupplierService(suppliers, products, audit)
+    inventory_service = InventoryService(db, inventory_repo, products, audit, supplier_service)
+    sales_service = SalesService(db, sales_repo, products, inventory_service, audit)
+    import_export_service = ImportExportService(
+        products, sales_repo, product_service, inventory_service,
+        sales_service, supplier_service, audit,
+    )
+
+    return SimpleNamespace(
+        db=db,
+        products=products,
+        suppliers=suppliers,
+        inventory_repo=inventory_repo,
+        sales_repo=sales_repo,
+        audit=audit,
+        settings=settings,
+        product_service=product_service,
+        supplier_service=supplier_service,
+        inventory_service=inventory_service,
+        sales_service=sales_service,
+        import_export_service=import_export_service,
+        backup_service=BackupService(db),
+        dashboard_service=DashboardService(product_service, inventory_service, sales_repo),
+    )
 
 
 class AppContext:
@@ -26,11 +80,13 @@ class AppContext:
 
     def __init__(self) -> None:
         self.db: DatabaseConnection | None = None
-        # Repositories and services are wired in Phase 2.
         self.initialized: bool = False
 
     def initialize(self) -> None:
         """Run all startup tasks (idempotent)."""
+        if self.initialized:
+            return
+
         Config.ensure_directories()
         setup_logging()
 
@@ -39,7 +95,12 @@ class AppContext:
         logger.info("Database: %s", Config.DB_PATH)
 
         self.db = DatabaseConnection()
+        from repositories.sqlite.schema import initialize_database
+
         initialize_database(self.db)
+
+        for name, value in vars(build_context(self.db)).items():
+            setattr(self, name, value)
 
         self.initialized = True
         logger.info("%s ready.", Config.APP_NAME)

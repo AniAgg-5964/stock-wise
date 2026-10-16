@@ -42,7 +42,23 @@ copy .env.example .env      # then edit .env
 .venv\Scripts\flet.exe run main.py
 # or directly:
 .venv\Scripts\python.exe main.py
+
+# Run as a local web app (view in a browser at http://localhost:8550)
+.venv\Scripts\flet.exe run --web --port 8550 main.py
 ```
+
+## Seed demo data
+
+Populate a realistic grocery/convenience dataset (15 products, 5 suppliers,
+60 days of demand history, opening stock, expiry batches). Idempotent — it does
+nothing if products already exist unless `--reset` is given.
+
+```powershell
+.venv\Scripts\python.exe scripts\seed_demo_data.py           # seed
+.venv\Scripts\python.exe scripts\seed_demo_data.py --reset   # clear and reseed
+```
+
+CSV import templates live in `imports/templates/`.
 
 ## Tests
 
@@ -88,11 +104,11 @@ automatic ordering).
 
 ## Status
 
-Early. See the roadmap below.
+Stage 0–2 complete (P0 core). Forecasting, reorder, and TinyFish are later stages.
 
 - [x] Stage 0 — Environment and scaffolding
-- [ ] Stage 1 — Flet shell, config/logging, SQLite bootstrap and migrations
-- [ ] Stage 2 — Products, suppliers, stock ledger, batches, sales, CSV import/export
+- [x] Stage 1 — Flet shell, config/logging, SQLite bootstrap and migrations
+- [x] Stage 2 — Products, suppliers, stock ledger, batches, sales, CSV import/export
 - [ ] Stage 3 — Baseline forecast and data pipeline
 - [ ] Stage 4 — XGBoost model
 - [ ] Stage 5 — Forecast UI and explanations

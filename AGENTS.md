@@ -15,6 +15,10 @@ system `python` (3.14, unsupported). Built and tested on **Python 3.13.7**.
 # Run the app (Flet 1.0: use the installed flet CLI; `python -m flet` does NOT work)
 .venv\Scripts\flet.exe run main.py
 # or: .venv\Scripts\python.exe main.py
+# local web preview: .venv\Scripts\flet.exe run --web --port 8550 main.py
+
+# Seed the demo dataset (idempotent; --reset to clear first)
+.venv\Scripts\python.exe scripts\seed_demo_data.py
 
 # Tests (run from repo root; pyproject sets testpaths=["tests"], pythonpath=["."])
 .venv\Scripts\python.exe -m pytest
@@ -51,30 +55,46 @@ Rules from the product spec (do not violate):
 
 ## Layout
 
-- `app/` — config, logging, bootstrap (DI wiring), navigation, theme
-- `domain/` — entities, enums, policies, exceptions
-- `application/services/` — product, inventory, sales, forecast, reorder, supplier, import_export, backup
-- `repositories/sqlite/` — connection (FK ON, WAL), schema (idempotent + versioned), per-table repos
-- `ui/views/` and `ui/components/` — Flet screens and reusable widgets
+- `app/` — config, logging, bootstrap (DI wiring via `build_context`/`AppContext`), navigation, theme
+- `domain/` — entities, enums, policies (validation + FEFO + status), exceptions, money helpers
+- `application/dto.py` — DTOs (ImportPreview/ImportResult, ProductStock, DashboardStats)
+- `application/services/` — product, inventory, sales, supplier, import_export, backup, dashboard (+ forecast/reorder later)
+- `repositories/interfaces.py` — repository contracts; `repositories/sqlite/` — connection (FK ON, WAL), schema (idempotent + versioned), per-table repos
+- `ui/views/` — real screens (dashboard, inventory, product_detail, sales, expiry, suppliers, reports/import-export, settings) + placeholders for later stages
+- `ui/components/` — layout (page_header/card/section), forms (text_field/dropdown_field), feedback (notify/banner), table, kpi_card, status_chip, empty_state
 - `ml/` — data_validation, preprocessing, features, train, evaluate, predict, fallback, artifacts
 - `integrations/tinyfish/` — client, schemas, parser, source_validation
 - `imports/templates/` — CSV templates; `migrations/` — schema versions
 - `scripts/` — seed_demo_data.py (and later train/evaluate)
-- `tests/unit|integration|acceptance/`
+- `tests/unit|integration|acceptance/`; `tests/conftest.py` provides the `ctx` and `wired_app_context` fixtures
 
 ## Environment
 
 `.env` (gitignored) is loaded by `python-dotenv`. Copy from `.env.example`:
 `TINYFISH_API_KEY` (optional), `STOCKWISE_ENV`, `STOCKWISE_LOG_LEVEL`, `STOCKWISE_DB_PATH`.
 
-## Flet
+## Flet 1.0 notes (verified against installed 1.0.4)
 
 Flet resolves to **1.0.4** — write against the Flet 1.0 API. Verify styling/control
 signatures against current Flet 1.0 docs (Context7 MCP server is configured) rather
-than assuming older 0.x APIs.
+than assuming older 0.x APIs. Specifics already hit:
+
+- Buttons: `ft.Button` / `ft.FilledButton` / `ft.OutlinedButton` / `ft.TextButton` / `ft.IconButton`.
+  There is **no** `ft.ElevatedButton`. Use `content=` (str or control) plus `icon=`.
+- Dialogs/snackbars: `page.show_dialog(dialog)` and `page.pop_dialog()` (not `page.open`/`page.close`).
+  `page.show_dialog(ft.SnackBar(...))` for snackbars.
+- `ft.Switch` uses `label_text_style`; `ft.Checkbox` uses `label_style`.
+- `ft.Dropdown` uses `ft.DropdownOption(key=..., text=...)` and `on_select`.
+- Text fields: style the border with a `{ControlState.DEFAULT: OutlineInputBorder(...), ControlState.FOCUSED: ...}` dict
+  (the old `border_color`/`focused_border_color`/`border_radius` kwargs are deprecated).
+- `ft.DataTable` rows expose `on_select_change` (shows checkboxes) — for row clicks we add an explicit action cell instead.
+- React to enum values with `.value`, never `str(enum)` (which yields `"MovementType.SALE"`).
 
 ## Gotchas
 
-- Tests create isolated temp databases; they never touch the real app-data DB.
+- Tests create isolated temp databases; the `ctx` fixture builds the full service graph on a temp DB,
+  and `wired_app_context` points the shared `app_context` singleton at it for view-construction tests.
 - `pyproject.toml` pins exact dependency versions; keep the in-repo `requirements.lock` in sync if you change them.
 - Schema is versioned via `schema_version`; bump `DB_SCHEMA_VERSION` and add a migration rather than altering tables in place.
+- Money is `Decimal` in the domain; repositories convert at the SQLite boundary (`to_money`/`to_db`).
+  Never multiply a `Decimal` by a float — wrap the float in `Decimal(str(x))` first.

@@ -13,25 +13,7 @@ import flet as ft
 
 from app.theme import StockWiseTheme as T
 from ui.components.empty_state import empty_state
-
-
-def page_header(title: str, subtitle: Optional[str] = None, actions: Optional[list[ft.Control]] = None) -> ft.Control:
-    """Standard page header (title + optional subtitle + right-aligned actions)."""
-    left = ft.Column(
-        spacing=2,
-        controls=[
-            ft.Text(title, size=T.FONT_TITLE, weight=ft.FontWeight.BOLD, color=T.TEXT_PRIMARY),
-        ],
-    )
-    if subtitle:
-        left.controls.append(ft.Text(subtitle, size=T.FONT_SMALL, color=T.TEXT_SECONDARY))
-
-    controls: list[ft.Control] = [left, ft.Container(expand=True)]
-    if actions:
-        controls.append(ft.Row(spacing=8, controls=actions))
-    return ft.Container(padding=ft.Padding.only(bottom=T.GAP), content=ft.Row(
-        vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=controls
-    ))
+from ui.components.layout import page_header  # re-exported for shared use
 
 
 def build_placeholder_view(

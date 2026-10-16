@@ -1,0 +1,3 @@
+﻿sku,name,category,unit,brand,cost_price,selling_price,reorder_point,safety_stock,expiry_tracking,opening_stock,lead_time_days,minimum_order_qty,pack_size,supplier
+SKU-001,Toor Dal 1kg,Staples,kg,Demo Brand,92.00,120.00,15,5,no,40,3,10,1,Demo Distributors
+SKU-002,Amul Taaza Milk 500ml,Dairy,pkt,Amul,25.00,28.00,24,12,yes,60,1,12,12,Demo Dairy Supplies
