@@ -17,6 +17,7 @@ from ui.views.import_export_view import build_import_export_view
 from ui.views.inventory_view import build_inventory_view
 from ui.views.placeholder_views import build_placeholder_view
 from ui.views.product_detail_view import build_product_detail_view
+from ui.views.reorder_view import build_reorder_view
 from ui.views.sales_view import build_sales_view
 from ui.views.settings_view import build_settings_view
 from ui.views.suppliers_view import build_suppliers_view
@@ -40,6 +41,7 @@ VIEW_BUILDERS: dict[str, Callable[[ft.Page, Callable[[str], None]], ft.Control]]
     "/inventory": build_inventory_view,
     "/sales": build_sales_view,
     "/forecasting": build_forecasting_view,
+    "/reorder": build_reorder_view,
     "/expiry": build_expiry_view,
     "/suppliers": build_suppliers_view,
     "/reports": build_import_export_view,

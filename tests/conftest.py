@@ -17,6 +17,7 @@ from application.services.import_export_service import ImportExportService
 from application.services.inventory_service import InventoryService
 from application.services.model_service import ModelService
 from application.services.product_service import ProductService
+from application.services.reorder_service import ReorderService
 from application.services.sales_service import SalesService
 from application.services.supplier_service import SupplierService
 from repositories.sqlite.audit_repository import SqliteAuditRepository
@@ -24,6 +25,8 @@ from repositories.sqlite.connection import DatabaseConnection
 from repositories.sqlite.forecast_repository import SqliteForecastRepository
 from repositories.sqlite.inventory_repository import SqliteInventoryRepository
 from repositories.sqlite.product_repository import SqliteProductRepository
+from repositories.sqlite.purchase_order_repository import SqlitePurchaseOrderRepository
+from repositories.sqlite.reorder_repository import SqliteReorderRepository
 from repositories.sqlite.sales_repository import SqliteSalesRepository
 from repositories.sqlite.schema import initialize_database
 from repositories.sqlite.settings_repository import SqliteSettingsRepository
@@ -41,6 +44,8 @@ def ctx(tmp_path):
     inventory_repo = SqliteInventoryRepository(db)
     sales_repo = SqliteSalesRepository(db)
     forecast_repo = SqliteForecastRepository(db)
+    purchase_orders = SqlitePurchaseOrderRepository(db)
+    reorder_repo = SqliteReorderRepository(db)
     audit = SqliteAuditRepository(db)
     settings = SqliteSettingsRepository(db)
 
@@ -55,6 +60,10 @@ def ctx(tmp_path):
     forecast_service = ForecastService(db, forecast_repo, products, settings)
     model_service = ModelService(model_dir=tmp_path / "models")
     forecast_service.model_service = model_service
+    reorder_service = ReorderService(
+        db, forecast_service, inventory_service, products, suppliers,
+        purchase_orders, reorder_repo, settings, audit,
+    )
 
     return SimpleNamespace(
         db=db,
@@ -72,6 +81,9 @@ def ctx(tmp_path):
         import_export_service=import_export_service,
         forecast_service=forecast_service,
         model_service=model_service,
+        purchase_orders=purchase_orders,
+        reorder_repo=reorder_repo,
+        reorder_service=reorder_service,
         backup_service=BackupService(db),
         dashboard_service=DashboardService(product_service, inventory_service, sales_repo),
     )
