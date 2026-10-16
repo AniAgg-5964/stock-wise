@@ -12,6 +12,7 @@ import pytest
 
 from application.services.backup_service import BackupService
 from application.services.dashboard_service import DashboardService
+from application.services.alert_service import AlertsService
 from application.services.forecast_service import ForecastService
 from application.services.import_export_service import ImportExportService
 from application.services.inventory_service import InventoryService
@@ -64,6 +65,7 @@ def ctx(tmp_path):
         db, forecast_service, inventory_service, products, suppliers,
         purchase_orders, reorder_repo, settings, audit,
     )
+    alert_service = AlertsService(products, inventory_service, forecast_service, settings)
 
     return SimpleNamespace(
         db=db,
@@ -84,6 +86,7 @@ def ctx(tmp_path):
         purchase_orders=purchase_orders,
         reorder_repo=reorder_repo,
         reorder_service=reorder_service,
+        alert_service=alert_service,
         backup_service=BackupService(db),
         dashboard_service=DashboardService(product_service, inventory_service, sales_repo),
     )

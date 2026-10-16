@@ -50,6 +50,18 @@ class SqliteForecastRepository(SqliteRepository):
             rows = c.execute("SELECT DISTINCT product_id FROM daily_demand").fetchall()
         return [int(r["product_id"]) for r in rows]
 
+    def total_demand_by_date(self, start: str, end: str,
+                             conn: sqlite3.Connection | None = None) -> list[tuple[str, float]]:
+        """Total demand across all products per calendar day (for the dashboard)."""
+        with self._conn(conn) as c:
+            rows = c.execute(
+                """SELECT demand_date, COALESCE(SUM(quantity_sold), 0) AS q
+                   FROM daily_demand WHERE demand_date BETWEEN ? AND ?
+                   GROUP BY demand_date ORDER BY demand_date""",
+                (start, end),
+            ).fetchall()
+        return [(r["demand_date"], float(r["q"])) for r in rows]
+
     # ----------------------------------------------------------------- forecasts
     def replace_forecasts(
         self,

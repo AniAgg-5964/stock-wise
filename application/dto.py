@@ -113,6 +113,18 @@ class ForecastResult:
 
 
 @dataclass
+class Alert:
+    """A single actionable alert shown on the dashboard / expiry screen."""
+
+    kind: str            # out_of_stock | low_stock | near_expiry | expired | expiry_risk | demand_spike
+    severity: str        # critical | warning | info
+    title: str
+    message: str
+    route: str = "/"
+    product_id: int | None = None
+
+
+@dataclass
 class DashboardStats:
     """Real, database-derived dashboard metrics (never fabricated)."""
 
