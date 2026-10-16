@@ -19,7 +19,7 @@ from domain.exceptions import InsufficientStockError, StockWiseError
 from domain.money import format_money, to_money
 from ui.components.feedback import notify, notify_error
 from ui.components.forms import dropdown_field, text_field
-from ui.components.layout import page_header, scroll_column, section
+from ui.components.layout import flow_row, page_header, scroll_column, section
 from ui.components.table import action_cell, styled_table, text_cell
 
 _SOURCE_LABELS = {"manual": "Manual", "csv_import": "CSV import"}
@@ -122,14 +122,14 @@ def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Contr
     new_sale = section(
         "Record a sale",
         ft.Column(spacing=T.GAP, controls=[
-            ft.Row(spacing=T.GAP_SMALL, wrap=True, controls=[product_dd, qty_field, price_field, ft.Button(content="Add to cart", icon=ft.Icons.ADD, on_click=add_to_cart)]),
+            flow_row([product_dd, qty_field, price_field, ft.Button(content="Add to cart", icon=ft.Icons.ADD, on_click=add_to_cart)]),
             cart_holder,
             ft.Row(controls=[
                 ft.Text("Total", size=T.FONT_SMALL, color=T.TEXT_SECONDARY),
                 ft.Container(expand=True),
                 total_text,
             ]),
-            ft.Row(spacing=T.GAP_SMALL, wrap=True, controls=[date_field, notes_field]),
+            flow_row([date_field, notes_field], col={"xs": 12, "sm": 6, "lg": 6}),
             override,
             ft.Row(spacing=T.GAP_SMALL, controls=[
                 ft.Button(content="Record sale", icon=ft.Icons.CHECK, on_click=record),

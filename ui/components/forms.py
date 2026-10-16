@@ -1,4 +1,4 @@
-"""StockWise — form field helpers (themed TextField and Dropdown)."""
+"""StockWise — form field helpers (themed TextField, Dropdown, search box)."""
 
 from __future__ import annotations
 
@@ -7,20 +7,6 @@ from typing import Callable, Optional, Sequence
 import flet as ft
 
 from app.theme import StockWiseTheme as T
-
-
-def _outline(color: str) -> ft.OutlineInputBorder:
-    return ft.OutlineInputBorder(
-        border_radius=ft.BorderRadius.all(T.INPUT_RADIUS),
-        side=ft.BorderSide(1, color),
-    )
-
-
-def _border() -> dict:
-    return {
-        ft.ControlState.DEFAULT: _outline(T.BORDER),
-        ft.ControlState.FOCUSED: _outline(T.PRIMARY),
-    }
 
 
 def text_field(
@@ -34,6 +20,7 @@ def text_field(
     on_change: Optional[Callable] = None,
     on_submit: Optional[Callable] = None,
     autofocus: bool = False,
+    dense: bool = False,
 ) -> ft.TextField:
     """A themed text field usable across all forms."""
     return ft.TextField(
@@ -47,12 +34,45 @@ def text_field(
         on_change=on_change,
         on_submit=on_submit,
         autofocus=autofocus,
-        bgcolor=T.BG_INPUT,
+        dense=dense,
+        bgcolor=T.BG_CARD,
         color=T.TEXT_PRIMARY,
         text_size=T.FONT_BODY,
         cursor_color=T.PRIMARY,
         label_style=ft.TextStyle(color=T.TEXT_SECONDARY, size=T.FONT_SMALL),
-        border=_border(),
+        hint_style=ft.TextStyle(color=T.TEXT_TERTIARY, size=T.FONT_BODY),
+        border=T.input_border(),
+        focused_border_color=None,
+    )
+
+
+def search_field(
+    hint: str = "Search\u2026",
+    *,
+    width: int | None = None,
+    expand: bool = False,
+    on_change: Optional[Callable] = None,
+    on_submit: Optional[Callable] = None,
+) -> ft.TextField:
+    """A borderless pill search box (used in the top bar and toolbars)."""
+    return ft.TextField(
+        hint_text=hint,
+        width=width,
+        expand=expand,
+        height=40,
+        content_padding=ft.Padding.symmetric(horizontal=14),
+        on_change=on_change,
+        on_submit=on_submit,
+        bgcolor=T.BG_INPUT,
+        color=T.TEXT_PRIMARY,
+        text_size=T.FONT_BODY,
+        cursor_color=T.PRIMARY,
+        hint_style=ft.TextStyle(color=T.TEXT_TERTIARY, size=T.FONT_BODY),
+        prefix_icon=ft.Icons.SEARCH,
+        border=ft.OutlineInputBorder(
+            border_radius=ft.BorderRadius.all(T.INPUT_RADIUS),
+            side=ft.BorderSide(0, ft.Colors.TRANSPARENT),
+        ),
     )
 
 
@@ -64,6 +84,7 @@ def dropdown_field(
     width: int | None = None,
     expand: bool = False,
     on_select: Optional[Callable] = None,
+    dense: bool = False,
 ) -> ft.Dropdown:
     """A themed dropdown. ``options`` is a sequence of ``(key, label)`` pairs."""
     return ft.Dropdown(
@@ -71,11 +92,12 @@ def dropdown_field(
         value=value,
         width=width,
         expand=expand,
+        dense=dense,
         on_select=on_select,
         options=[ft.DropdownOption(key=key, text=label) for key, label in options],
-        bgcolor=T.BG_INPUT,
+        bgcolor=T.BG_CARD,
         color=T.TEXT_PRIMARY,
         text_size=T.FONT_BODY,
         label_style=ft.TextStyle(color=T.TEXT_SECONDARY, size=T.FONT_SMALL),
-        border=_border(),
+        border=T.input_border(),
     )

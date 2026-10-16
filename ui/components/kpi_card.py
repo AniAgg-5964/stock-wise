@@ -1,7 +1,7 @@
 """StockWise — KPI card component.
 
-A compact metric card used on the dashboard. Values must always come from real
-data (database/services) — never fabricated.
+A compact metric card used across the dashboard and detail screens. Values must
+always come from real data (database/services) — never fabricated.
 """
 
 from __future__ import annotations
@@ -19,47 +19,62 @@ def kpi_card(
     *,
     subtitle: Optional[str] = None,
     icon: str = ft.Icons.ANALYTICS_OUTLINED,
-    accent: str = T.PRIMARY,
+    accent: str | None = None,
     on_click: Optional[Callable] = None,
+    delta: Optional[str] = None,
+    delta_kind: str = "muted",
+    col=None,
 ) -> ft.Control:
-    """Build a single KPI card."""
-    value_row = ft.Row(
-        spacing=8,
-        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+    """Build a single KPI card: icon tile, label, large value, caption.
+
+    Pass ``col`` when placing cards in a ``ResponsiveRow`` so they reflow.
+    """
+    accent = accent or T.PRIMARY
+    caption = delta if delta is not None else subtitle
+    caption_color = {
+        "up": T.STATUS_HEALTHY,
+        "down": T.STATUS_CRITICAL,
+        "info": T.STATUS_INFO,
+        "warn": T.STATUS_WARNING,
+        "muted": T.TEXT_TERTIARY,
+    }.get(delta_kind, T.TEXT_TERTIARY)
+
+    text_column = ft.Column(
+        spacing=2,
+        expand=True,
         controls=[
+            ft.Text(title, size=T.FONT_SMALL, color=T.TEXT_SECONDARY, weight=ft.FontWeight.W_500),
             ft.Text(value, size=T.FONT_DISPLAY, weight=ft.FontWeight.BOLD, color=T.TEXT_PRIMARY),
         ],
     )
-
-    children: list[ft.Control] = [
-        ft.Row(
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            vertical_alignment=ft.CrossAxisAlignment.START,
-            controls=[
-                ft.Text(title, size=T.FONT_SMALL, color=T.TEXT_SECONDARY, weight=ft.FontWeight.W_500),
-                ft.Container(
-                    width=34,
-                    height=34,
-                    border_radius=T.RADIUS_SMALL,
-                    bgcolor=ft.Colors.with_opacity(0.14, accent),
-                    alignment=ft.Alignment.CENTER,
-                    content=ft.Icon(icon, size=18, color=accent),
-                ),
-            ],
-        ),
-        ft.Container(height=6),
-        value_row,
-    ]
-    if subtitle:
-        children.append(ft.Text(subtitle, size=T.FONT_TINY, color=T.TEXT_TERTIARY))
+    if caption:
+        text_column.controls.append(
+            ft.Text(caption, size=T.FONT_SMALL, color=caption_color, weight=ft.FontWeight.W_500)
+        )
 
     return ft.Container(
-        expand=True,
+        expand=col is None,
+        col=col,
         padding=T.CARD_PADDING,
         bgcolor=T.BG_CARD,
         border_radius=T.RADIUS,
         border=ft.Border.all(1, T.BORDER_SUBTLE),
+        shadow=T.shadow(),
         on_click=on_click,
         ink=on_click is not None,
-        content=ft.Column(spacing=2, controls=children),
+        content=ft.Row(
+            spacing=T.GAP,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[
+                ft.Container(
+                    width=44,
+                    height=44,
+                    border_radius=T.RADIUS_SMALL,
+                    bgcolor=ft.Colors.with_opacity(0.14, accent),
+                    alignment=ft.Alignment.CENTER,
+                    content=ft.Icon(icon, size=22, color=accent),
+                ),
+                text_column,
+            ],
+        ),
     )

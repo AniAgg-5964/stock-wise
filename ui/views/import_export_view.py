@@ -131,7 +131,7 @@ def build_import_export_view(page: ft.Page, navigate: Callable[[str], None]) -> 
 
     export_panel = section(
         "Export data",
-        ft.Row(spacing=T.GAP_SMALL, wrap=True, controls=[
+        ft.Row(spacing=T.GAP_SMALL, controls=[
             ft.OutlinedButton(content="Export products CSV", icon=ft.Icons.TABLE_VIEW,
                               on_click=export_products),
             ft.OutlinedButton(content="Export sales CSV", icon=ft.Icons.RECEIPT_LONG,

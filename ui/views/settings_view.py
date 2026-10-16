@@ -16,7 +16,7 @@ from app.theme import StockWiseTheme as T
 from repositories.sqlite.schema import SCHEMA_VERSION, get_schema_version
 from ui.components.feedback import notify, notify_error
 from ui.components.forms import dropdown_field, text_field
-from ui.components.layout import page_header, scroll_column, section
+from ui.components.layout import flow_row, page_header, scroll_column, section
 from ui.components.table import action_cell, styled_table, text_cell
 
 _BASELINE_OPTIONS = [
@@ -78,16 +78,16 @@ def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Co
     store_panel = section(
         "Store preferences",
         ft.Column(spacing=T.GAP_SMALL, controls=[
-            ft.Row(spacing=T.GAP_SMALL, wrap=True, controls=[fields["shop_name"], fields["currency"]]),
-            ft.Row(spacing=T.GAP_SMALL, wrap=True, controls=[
+            flow_row([fields["shop_name"], fields["currency"]], col={"xs": 12, "sm": 6, "lg": 4}),
+            flow_row([
                 fields["forecast_horizon_days"], fields["review_period_days"],
                 fields["safety_buffer_days"], fields["near_expiry_window_days"],
                 fields["purchase_budget"],
-            ]),
-            ft.Row(spacing=T.GAP_SMALL, wrap=True, controls=[
+            ], col={"xs": 12, "sm": 6, "lg": 4}),
+            flow_row([
                 policy_fields["forecast_baseline_method"], policy_fields["safety_policy"],
                 policy_fields["service_level"],
-            ]),
+            ], col={"xs": 12, "sm": 6, "lg": 4}),
             ft.Text("These preferences drive forecasting, reorder recommendations and expiry alerts.",
                     size=T.FONT_TINY, color=T.TEXT_TERTIARY),
             ft.Button(content="Save settings", icon=ft.Icons.SAVE_OUTLINED, on_click=save),

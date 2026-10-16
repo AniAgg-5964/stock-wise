@@ -89,6 +89,18 @@ than assuming older 0.x APIs. Specifics already hit:
   (the old `border_color`/`focused_border_color`/`border_radius` kwargs are deprecated).
 - `ft.DataTable` rows expose `on_select_change` (shows checkboxes) — for row clicks we add an explicit action cell instead.
 - React to enum values with `.value`, never `str(enum)` (which yields `"MovementType.SALE"`).
+- `ft.Row(wrap=True)` makes the whole row (and everything under it) render as a blank grey
+  block in 1.0.4 — never use it. Use `ft.ResponsiveRow` instead; `ui/components/layout.py`
+  provides `flow_row(...)`, `kpi_grid(...)` and `panel_grid(...)` for wrapping layouts.
+- `ft.DataCell` content is laid out with unbounded width: a stretchy `ft.Row` or a bare
+  `ft.Column` inside a cell makes the entire `DataTable` render blank. Wrap cell content in a
+  `tight=True` Row — use `ui/components/table.py`'s `entity_cell(...)` for name/subtitle cells.
+- `ft.Stack` children shrink-wrap unless you pass `fit=ft.StackFit.EXPAND`; position overlay
+  children with explicit `top`/`right`/`left`/`bottom`.
+- `ft.ColorScheme` has no `background`/`on_background` in 1.0 — use `surface`/`on_surface`.
+- Input borders: pass `border=ft.OutlineInputBorder(border_radius=..., side=ft.BorderSide(...))`
+  or a `{ControlState: OutlineInputBorder}` dict. `TextField.border_radius` and
+  `Dropdown.focused_border_color` are deprecated.
 
 ## Gotchas
 

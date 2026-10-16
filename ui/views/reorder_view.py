@@ -23,7 +23,7 @@ from ui.components.feedback import banner, notify, notify_error
 from ui.components.forms import text_field
 from ui.components.kpi_card import kpi_card
 from ui.components.layout import page_header, scroll_column, section
-from ui.components.table import action_cell, chip_cell, styled_table, text_cell
+from ui.components.table import action_cell, chip_cell, entity_cell, styled_table, text_cell
 
 _URGENCY_STATUS = {
     "critical": "critical",
@@ -166,12 +166,7 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         rows: list[ft.DataRow] = []
         for reco in recos:
             rows.append(ft.DataRow(cells=[
-                ft.DataCell(ft.Column(spacing=1, tight=True, controls=[
-                    ft.Text(reco.product_name, size=T.FONT_BODY, color=T.TEXT_PRIMARY,
-                            weight=ft.FontWeight.W_500),
-                    ft.Text(reco.supplier_name or "No preferred supplier", size=T.FONT_TINY,
-                            color=T.TEXT_TERTIARY),
-                ])),
+                entity_cell(reco.product_name, reco.supplier_name or "No preferred supplier"),
                 _urgency_chip(reco),
                 text_cell(f"{reco.suggested_qty} {reco.unit}"),
                 text_cell(format_money(reco.estimated_cost)),

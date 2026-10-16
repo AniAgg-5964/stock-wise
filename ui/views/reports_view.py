@@ -19,7 +19,7 @@ from ui.components.chart import bar_chart
 from ui.components.empty_state import empty_state
 from ui.components.feedback import notify, notify_error
 from ui.components.kpi_card import kpi_card
-from ui.components.layout import page_header, scroll_column, section
+from ui.components.layout import flow_row, page_header, scroll_column, section
 from ui.components.table import styled_table, text_cell
 
 EXPORT_DIR = Config.APP_DATA_DIR / "exports"
@@ -169,7 +169,7 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
 
     export_panel = section(
         "Export reports (CSV)",
-        ft.Row(spacing=T.GAP_SMALL, wrap=True, controls=[
+        flow_row([
             ft.OutlinedButton(content="Sales by day", icon=ft.Icons.TABLE_VIEW,
                               on_click=lambda e: export(
                                   "report_sales_by_day.csv", ["day", "revenue", "units"],
@@ -189,7 +189,7 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
                                   accuracy["products"])),
             ft.OutlinedButton(content="Waste", icon=ft.Icons.DELETE_OUTLINE,
                               on_click=lambda e: export("report_waste.csv", ["name", "qty"], waste["rows"])),
-        ]),
+        ], col={"xs": 12, "sm": 6, "lg": 4}),
         subtitle=f"Files are written to {EXPORT_DIR}",
     )
 

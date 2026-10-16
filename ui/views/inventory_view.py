@@ -17,9 +17,10 @@ from domain.entities import Product
 from domain.exceptions import StockWiseError
 from domain.money import format_money
 from ui.components.feedback import notify, notify_error
-from ui.components.forms import dropdown_field, text_field
-from ui.components.layout import page_header, scroll_column, section
-from ui.components.table import action_cell, chip_cell, styled_table, text_cell
+from ui.components.forms import dropdown_field, search_field, text_field
+from ui.components.kpi_card import kpi_card
+from ui.components.layout import KPI_COL, flow_row, kpi_grid, page_header, scroll_column, section
+from ui.components.table import action_cell, chip_cell, entity_cell, styled_table, text_cell
 
 _STATUS_FILTERS = [
     ("all", "All products"),
@@ -30,13 +31,29 @@ _STATUS_FILTERS = [
 ]
 
 _STATUS_LABELS = {
-    "healthy": "Healthy",
-    "low": "Low",
+    "healthy": "In stock",
+    "low": "Low stock",
     "out_of_stock": "Out of stock",
     "near_expiry": "Near expiry",
     "expired": "Expired",
     "at_risk": "At risk",
 }
+
+_CATEGORY_EMOJI = {
+    "dairy": "\U0001F95B",
+    "bakery": "\U0001F35E",
+    "beverages": "\U0001F964",
+    "snacks": "\U0001F36A",
+    "staples": "\U0001F35A",
+    "personal care": "\U0001F9F4",
+    "household": "\U0001F9F9",
+    "sweets": "\U0001F36C",
+    "frozen": "\U0001F9CA",
+}
+
+
+def _category_emoji(category: str) -> str:
+    return _CATEGORY_EMOJI.get((category or "").strip().lower(), "\U0001F4E6")
 
 
 def _dec(value: str, default: str = "0") -> Decimal:
@@ -60,6 +77,15 @@ def _float(value: str, default: float = 0.0) -> float:
         return default
 
 
+def _stock_color(status: str) -> str:
+    return {
+        "out_of_stock": T.STATUS_CRITICAL,
+        "expired": T.STATUS_CRITICAL,
+        "low": T.STATUS_WARNING,
+        "near_expiry": T.STATUS_WARNING,
+    }.get(status, T.TEXT_PRIMARY)
+
+
 def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Control:
     app = app_context
     state = {"search": "", "category": None, "status": "all"}
@@ -80,26 +106,34 @@ def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
         rows: list[ft.DataRow] = []
         for snap in snapshots:
             product = snap.product
+            stock_color = _stock_color(snap.status)
             rows.append(
                 ft.DataRow(cells=[
-                    ft.DataCell(ft.Column(spacing=1, tight=True, controls=[
-                        ft.Text(product.name, size=T.FONT_BODY, color=T.TEXT_PRIMARY,
-                                weight=ft.FontWeight.W_500),
-                        ft.Text(product.sku + ("" if product.active else " \u00b7 archived"),
-                                size=T.FONT_TINY, color=T.TEXT_TERTIARY),
-                    ])),
+                    entity_cell(
+                        product.name,
+                        None if product.active else "archived",
+                        leading=ft.Container(
+                            width=32, height=32,
+                            border_radius=T.RADIUS_SMALL,
+                            bgcolor=T.BG_INPUT,
+                            alignment=ft.Alignment.CENTER,
+                            content=ft.Text(_category_emoji(product.category), size=16),
+                        ),
+                    ),
+                    text_cell(product.sku, color=T.TEXT_SECONDARY),
                     text_cell(product.category, color=T.TEXT_SECONDARY),
-                    text_cell(f"{snap.usable_stock:g} {product.unit}"),
-                    chip_cell(_STATUS_LABELS.get(snap.status, snap.status), snap.status),
-                    text_cell(str(product.reorder_point), color=T.TEXT_SECONDARY),
+                    text_cell(f"{snap.usable_stock:g} {product.unit}", color=stock_color,
+                              weight=ft.FontWeight.W_600),
                     text_cell(format_money(product.selling_price), color=T.TEXT_SECONDARY),
-                    action_cell(lambda e, pid=product.id: navigate(f"/product/{pid}"), tooltip="Open product"),
+                    chip_cell(_STATUS_LABELS.get(snap.status, snap.status), snap.status),
+                    action_cell(lambda e, pid=product.id: navigate(f"/product/{pid}"),
+                                tooltip="Open product"),
                 ])
             )
 
         table_holder.controls = [
             styled_table(
-                ["Product", "Category", "Usable", "Status", "Reorder", "Price", ""],
+                ["Product", "SKU", "Category", "Stock", "Price", "Status", ""],
                 rows, empty_message="No products match these filters.",
             )
         ]
@@ -110,35 +144,75 @@ def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
     categories = app.product_service.list_categories()
     category_options = [("__all__", "All categories")] + [(c, c) for c in categories]
 
-    search = text_field("Search products", hint="Name, SKU or brand\u2026", width=300,
-                        on_change=lambda e: (state.update(search=e.control.value), render_table()))
-    category = dropdown_field("Category", category_options, value="__all__", width=220,
+    search = search_field("Search products\u2026", width=280,
+                          on_change=lambda e: (state.update(search=e.control.value), render_table()))
+    category = dropdown_field("Category", category_options, value="__all__", width=210,
+                              dense=True,
                               on_select=lambda e: (
                                   state.update(category=None if e.control.value == "__all__" else e.control.value),
                                   render_table(),
                               ))
-    status = dropdown_field("Status", _STATUS_FILTERS, value="all", width=200,
+    status = dropdown_field("Status", _STATUS_FILTERS, value="all", width=190, dense=True,
                             on_select=lambda e: (state.update(status=e.control.value or "all"), render_table()))
 
     render_table(update=False)
 
+    # --- KPI counts (always global, regardless of the active filters) ---
+    all_snapshots = app.inventory_service.snapshots_for_products(
+        app.product_service.list_products(active_only=False)
+    )
+    low = sum(1 for s in all_snapshots if s.status == "low")
+    out = sum(1 for s in all_snapshots if s.status == "out_of_stock")
+
+    kpis = kpi_grid([
+        kpi_card("Total Products", str(len(all_snapshots)), icon=ft.Icons.INVENTORY_2_OUTLINED,
+                 accent=T.STATUS_INFO, subtitle="In the catalogue", col=KPI_COL),
+        kpi_card("Low Stock", str(low), icon=ft.Icons.WARNING_AMBER_OUTLINED,
+                 accent=T.STATUS_WARNING, subtitle="At or below reorder point", col=KPI_COL,
+                 on_click=lambda e: _set_filter(status, state, render_table, "low")),
+        kpi_card("Out of Stock", str(out), icon=ft.Icons.REMOVE_SHOPPING_CART_OUTLINED,
+                 accent=T.STATUS_CRITICAL, subtitle="Needs restocking", col=KPI_COL,
+                 on_click=lambda e: _set_filter(status, state, render_table, "out_of_stock")),
+        kpi_card("Categories", str(len(categories)), icon=ft.Icons.CATEGORY_OUTLINED,
+                 accent=T.ACCENT, subtitle="Product groups", col=KPI_COL),
+    ])
+
     header = page_header(
         "Inventory",
-        "Products, stock levels and expiry status",
+        "Manage your products and stock levels \u2014 add, edit or remove products and track expiry.",
         actions=[
             ft.OutlinedButton(content="Import / Export", icon=ft.Icons.SWAP_VERT,
-                              on_click=lambda e: navigate("/reports")),
-            ft.Button(content="Add product", icon=ft.Icons.ADD, on_click=lambda e: _open_add_product(page, navigate)),
+                              on_click=lambda e: navigate("/data")),
+            ft.Button(content="Add Product", icon=ft.Icons.ADD,
+                      on_click=lambda e: _open_add_product(page, navigate)),
         ],
     )
 
-    toolbar = ft.Row(spacing=T.GAP, controls=[search, category, status, ft.Container(expand=True), count_text])
+    toolbar = flow_row([
+        (search, {"xs": 12, "sm": 12, "lg": 6}),
+        (category, {"xs": 12, "sm": 6, "lg": 3}),
+        (status, {"xs": 12, "sm": 6, "lg": 3}),
+    ])
 
     return scroll_column([
         header,
-        toolbar,
-        section("Product catalogue", table_holder),
+        kpis,
+        section(
+            "Product catalogue",
+            ft.Column(spacing=T.GAP_SMALL, controls=[toolbar, table_holder]),
+            subtitle=count_text,
+        ),
     ])
+
+
+def _set_filter(status_control, state: dict, render_table, value: str) -> None:
+    state["status"] = value
+    status_control.value = value
+    try:
+        status_control.update()
+    except Exception:  # pragma: no cover - defensive
+        pass
+    render_table()
 
 
 def _open_add_product(page: ft.Page, navigate: Callable[[str], None]) -> None:
@@ -160,7 +234,8 @@ def _open_add_product(page: ft.Page, navigate: Callable[[str], None]) -> None:
                               label_text_style=ft.TextStyle(color=T.TEXT_SECONDARY, size=T.FONT_SMALL))
     suppliers = app.supplier_service.list_suppliers()
     supplier_dd = dropdown_field("Preferred supplier (optional)",
-                                 [("__none__", "None")] + [(str(s.id), s.name) for s in suppliers], value="__none__")
+                                 [("__none__", "None")] + [(str(s.id), s.name) for s in suppliers],
+                                 value="__none__")
 
     def save(e) -> None:
         try:
