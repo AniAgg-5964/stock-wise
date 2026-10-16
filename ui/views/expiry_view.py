@@ -24,7 +24,7 @@ from ui.components.empty_state import empty_state
 from ui.components.feedback import notify, notify_error
 from ui.components.forms import text_field
 from ui.components.kpi_card import kpi_card
-from ui.components.layout import page_header, scroll_column, section
+from ui.components.layout import KPI_COL, kpi_grid, page_header, scroll_column, section
 from ui.components.table import action_cell, chip_cell, styled_table, text_cell
 
 
@@ -150,22 +150,19 @@ def build_expiry_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Cont
         risk_for(b) * float(b.unit_cost or 0) for b in (expiring + expired)
     )
 
-    kpis = ft.Row(
-        spacing=T.GAP,
-        controls=[
-            kpi_card("Batches expiring", str(len(expiring)), icon=ft.Icons.EVENT_BUSY_OUTLINED,
-                     accent=T.STATUS_WARNING, subtitle=f"within {window} days"),
-            kpi_card("Units expiring", f"{units_expiring:g}", icon=ft.Icons.INVENTORY_2_OUTLINED,
-                     accent=T.STATUS_WARNING, subtitle="still usable"),
-            kpi_card("Estimated value at risk", format_money(value_at_risk),
-                     icon=ft.Icons.CURRENCY_RUPEE, accent=T.STATUS_CRITICAL,
-                     subtitle="likely unrealised"),
-            kpi_card("Already expired", f"{units_expired:g} units",
-                     icon=ft.Icons.DELETE_SWEEP_OUTLINED,
-                     accent=T.STATUS_CRITICAL if units_expired else T.STATUS_HEALTHY,
-                     subtitle="not sellable"),
-        ],
-    )
+    kpis = kpi_grid([
+        kpi_card("Batches expiring", str(len(expiring)), icon=ft.Icons.EVENT_BUSY_OUTLINED,
+                 accent=T.STATUS_WARNING, subtitle=f"within {window} days", col=KPI_COL),
+        kpi_card("Units expiring", f"{units_expiring:g}", icon=ft.Icons.INVENTORY_2_OUTLINED,
+                 accent=T.STATUS_WARNING, subtitle="still usable", col=KPI_COL),
+        kpi_card("Estimated value at risk", format_money(value_at_risk),
+                 icon=ft.Icons.CURRENCY_RUPEE, accent=T.STATUS_CRITICAL,
+                 subtitle="likely unrealised", col=KPI_COL),
+        kpi_card("Already expired", f"{units_expired:g} units",
+                 icon=ft.Icons.DELETE_SWEEP_OUTLINED,
+                 accent=T.STATUS_CRITICAL if units_expired else T.STATUS_HEALTHY,
+                 subtitle="not sellable", col=KPI_COL),
+    ])
 
     header = page_header(
         "Expiry Management",

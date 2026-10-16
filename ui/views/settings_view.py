@@ -16,7 +16,7 @@ from app.theme import StockWiseTheme as T
 from repositories.sqlite.schema import SCHEMA_VERSION, get_schema_version
 from ui.components.feedback import notify, notify_error
 from ui.components.forms import dropdown_field, text_field
-from ui.components.layout import flow_row, page_header, scroll_column, section
+from ui.components.layout import flow_row, page_header, panel_grid, scroll_column, section
 from ui.components.table import action_cell, styled_table, text_cell
 
 _BASELINE_OPTIONS = [
@@ -180,8 +180,7 @@ def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Co
     return scroll_column([
         page_header("Settings", "Preferences, model, backups and diagnostics"),
         store_panel,
-        ft.Row(spacing=T.GAP, controls=[model_panel, diagnostics_panel],
-               vertical_alignment=ft.CrossAxisAlignment.START),
+        panel_grid([(model_panel, 6), (diagnostics_panel, 6)]),
         backup_panel,
     ])
 

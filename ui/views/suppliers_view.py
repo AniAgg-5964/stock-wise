@@ -18,7 +18,7 @@ from domain.exceptions import StockWiseError
 from ui.components.empty_state import empty_state
 from ui.components.feedback import notify, notify_error
 from ui.components.forms import dropdown_field, text_field
-from ui.components.layout import page_header, scroll_column, section
+from ui.components.layout import page_header, panel_grid, scroll_column, section
 from ui.components.table import action_cell, chip_cell, styled_table, text_cell
 
 
@@ -87,7 +87,7 @@ def build_suppliers_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
     return scroll_column([
         header,
         supplier_panel,
-        ft.Row(spacing=T.GAP, controls=[sourcing_panel, link_panel], vertical_alignment=ft.CrossAxisAlignment.START),
+        panel_grid([(sourcing_panel, 7), (link_panel, 5)]),
     ])
 
 

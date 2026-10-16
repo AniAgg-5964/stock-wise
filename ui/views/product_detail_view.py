@@ -21,7 +21,7 @@ from ui.components.empty_state import empty_state
 from ui.components.feedback import notify, notify_error
 from ui.components.forms import dropdown_field, text_field
 from ui.components.kpi_card import kpi_card
-from ui.components.layout import page_header, scroll_column, section
+from ui.components.layout import KPI_COL, kpi_grid, page_header, panel_grid, scroll_column, section
 from ui.components.status_chip import status_chip
 from ui.components.table import chip_cell, styled_table, text_cell
 
@@ -88,14 +88,15 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
         (Decimal(str(b.quantity_remaining)) * (b.unit_cost or Decimal("0")))
         for b in batches if b.quantity_remaining > 0
     )
-    kpis = ft.Row(spacing=T.GAP, controls=[
+    kpis = kpi_grid([
         kpi_card("Usable stock", f"{snapshot.usable_stock:g}", subtitle=f"in {product.unit}",
-                 accent=T.STATUS_HEALTHY),
+                 accent=T.STATUS_HEALTHY, col=KPI_COL),
         kpi_card("On hand (ledger)", f"{snapshot.stock_level:g}", subtitle="physical units",
-                 accent=T.STATUS_INFO),
-        kpi_card("Batches", str(snapshot.batch_count), subtitle="active batches", accent=T.PRIMARY),
+                 accent=T.STATUS_INFO, col=KPI_COL),
+        kpi_card("Batches", str(snapshot.batch_count), subtitle="active batches",
+                 accent=T.PRIMARY, col=KPI_COL),
         kpi_card("Stock value", format_money(stock_value), subtitle="at batch cost",
-                 accent=T.STATUS_WARNING),
+                 accent=T.STATUS_WARNING, col=KPI_COL),
     ])
 
     details = section(
@@ -170,7 +171,7 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
     return scroll_column([
         header,
         kpis,
-        ft.Row(spacing=T.GAP, controls=[details, suppliers_panel], vertical_alignment=ft.CrossAxisAlignment.START),
+        panel_grid([(details, 7), (suppliers_panel, 5)]),
         batches_panel,
         movements_panel,
     ])

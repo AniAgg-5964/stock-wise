@@ -68,3 +68,44 @@ def test_product_detail_route_handles_missing_product(wired_app_context):
     page = _StubPage()
     view = build_view("/product/999999", page, lambda r: None)
     assert isinstance(view, ft.Control)
+
+
+# --------------------------------------------------------------------------- layout guards
+# These lock in the Flet 1.0.4 workarounds documented in AGENTS.md so the UI cannot
+# silently regress into a blank grey page or an invisible DataTable.
+
+def _walk(control: ft.Control, depth: int = 0):
+    yield control
+    if depth > 60:  # pragma: no cover - defensive
+        return
+    for attr in ("controls", "content", "actions", "cells"):
+        children = getattr(control, attr, None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                if isinstance(child, ft.Control):
+                    yield from _walk(child, depth + 1)
+        elif isinstance(children, ft.Control):
+            yield from _walk(children, depth + 1)
+
+
+def test_no_view_uses_row_wrap(wired_app_context):
+    """``ft.Row(wrap=True)`` renders the whole page as a blank grey block in Flet 1.0."""
+    page = _StubPage()
+    for route, _label, _icon in NAV_ITEMS:
+        view = build_view(route, page, lambda r: None)
+        offenders = [n for n in _walk(view) if isinstance(n, ft.Row) and getattr(n, "wrap", False)]
+        assert not offenders, f"{route} uses ft.Row(wrap=True)"
+
+
+def test_no_data_cell_uses_unbounded_layout(wired_app_context):
+    """A stretchy Row / bare Column inside ``ft.DataCell`` blanks the whole table."""
+    page = _StubPage()
+    for route, _label, _icon in NAV_ITEMS:
+        view = build_view(route, page, lambda r: None)
+        offenders = [
+            n for n in _walk(view)
+            if isinstance(n, ft.DataCell)
+            and isinstance(n.content, (ft.Row, ft.Column))
+            and not getattr(n.content, "tight", False)
+        ]
+        assert not offenders, f"{route} has a non-tight {type(offenders[0].content).__name__} in a DataCell"

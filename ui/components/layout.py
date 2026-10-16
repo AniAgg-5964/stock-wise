@@ -159,7 +159,10 @@ def scroll_column(controls: list[ft.Control], *, spacing: int = T.GAP) -> ft.Col
 
 
 # KPI cards reflow to fit narrow windows: 1 per row, then 2, then 4 on wide desktops.
-KPI_BREAKPOINTS = {"xs": 0, "sm": 340, "lg": 1040}
+# ``lg`` must stay high enough that a 4-up card still has room for a long money
+# value such as "₹29,209.00" at FONT_DISPLAY (measured: card - padding - icon tile
+# - spacing must exceed ~145px, i.e. content >= ~1000px / window >= ~1280px).
+KPI_BREAKPOINTS = {"xs": 0, "sm": 340, "lg": 1300}
 KPI_COL = {"xs": 12, "sm": 6, "lg": 3}
 KPI_COL_THREE = {"xs": 12, "sm": 6, "lg": 4}
 
@@ -175,10 +178,13 @@ def kpi_grid(cards: list[ft.Control]) -> ft.Control:
 
 
 # Wide panels sit side by side on a desktop and stack on a narrow window.
-PANEL_BREAKPOINTS = {"xs": 0, "lg": 1040}
+# Kept above the KPI breakpoint: a two-up panel here holds a DataTable, which
+# needs real width to avoid horizontal overflow.
+PANEL_BREAKPOINTS = {"xs": 0, "lg": 1200}
 
 # Filter/field rows: stack in narrow windows, share a line on wide desktops.
-FILTER_BREAKPOINTS = {"xs": 0, "sm": 340, "lg": 1040}
+# Matches the panel breakpoint so fixed-width fields always fit their column.
+FILTER_BREAKPOINTS = {"xs": 0, "sm": 340, "lg": 1200}
 
 
 def panel_grid(panels: list[tuple[ft.Control, int]]) -> ft.Control:

@@ -19,7 +19,7 @@ from ui.components.chart import bar_chart
 from ui.components.empty_state import empty_state
 from ui.components.feedback import notify, notify_error
 from ui.components.kpi_card import kpi_card
-from ui.components.layout import flow_row, page_header, scroll_column, section
+from ui.components.layout import KPI_COL, flow_row, kpi_grid, page_header, panel_grid, scroll_column, section
 from ui.components.table import styled_table, text_cell
 
 EXPORT_DIR = Config.APP_DATA_DIR / "exports"
@@ -46,22 +46,20 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
                                    on_click=lambda e: navigate("/reports"))],
     )
 
-    kpis = ft.Row(
-        spacing=T.GAP,
-        controls=[
-            kpi_card("Revenue", format_money(sales["revenue"]), icon=ft.Icons.CURRENCY_RUPEE,
-                     accent=T.STATUS_HEALTHY, subtitle=f"last {_PERIOD} days"),
-            kpi_card("Units sold", f"{sales['units']:g}", icon=ft.Icons.INVENTORY_2_OUTLINED,
-                     subtitle=f"{sales['orders']} orders"),
-            kpi_card("Gross margin", format_money(sales["margin"]), icon=ft.Icons.TRENDING_UP,
-                     accent=T.ACCENT, subtitle="price \u2212 cost snapshot"),
-            kpi_card("Stock value", format_money(valuation["total_value"]), icon=ft.Icons.ACCOUNT_BALANCE_WALLET_OUTLINED,
-                     subtitle=f"{valuation['total_qty']:g} units on hand"),
-            kpi_card("Waste (90d)", f"{waste['total_units']:g} units", icon=ft.Icons.DELETE_OUTLINE,
-                     accent=T.STATUS_CRITICAL if waste["total_units"] else T.STATUS_HEALTHY,
-                     subtitle="written-off stock"),
-        ],
-    )
+    kpis = kpi_grid([
+        kpi_card("Revenue", format_money(sales["revenue"]), icon=ft.Icons.CURRENCY_RUPEE,
+                 accent=T.STATUS_HEALTHY, subtitle=f"last {_PERIOD} days", col=KPI_COL),
+        kpi_card("Units sold", f"{sales['units']:g}", icon=ft.Icons.INVENTORY_2_OUTLINED,
+                 subtitle=f"{sales['orders']} orders", col=KPI_COL),
+        kpi_card("Gross margin", format_money(sales["margin"]), icon=ft.Icons.TRENDING_UP,
+                 accent=T.ACCENT, subtitle="price \u2212 cost snapshot", col=KPI_COL),
+        kpi_card("Stock value", format_money(valuation["total_value"]),
+                 icon=ft.Icons.ACCOUNT_BALANCE_WALLET_OUTLINED,
+                 subtitle=f"{valuation['total_qty']:g} units on hand", col=KPI_COL),
+        kpi_card("Waste (90d)", f"{waste['total_units']:g} units", icon=ft.Icons.DELETE_OUTLINE,
+                 accent=T.STATUS_CRITICAL if waste["total_units"] else T.STATUS_HEALTHY,
+                 subtitle="written-off stock", col=KPI_COL),
+    ])
 
     # ---- sales trend ---------------------------------------------------------
     if by_day:
@@ -196,11 +194,9 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
     return scroll_column([
         header,
         kpis,
-        ft.Row(spacing=T.GAP, controls=[sales_panel, top_panel],
-               vertical_alignment=ft.CrossAxisAlignment.START),
+        panel_grid([(sales_panel, 6), (top_panel, 6)]),
         val_panel,
         acc_panel,
-        ft.Row(spacing=T.GAP, controls=[waste_panel, po_panel],
-               vertical_alignment=ft.CrossAxisAlignment.START),
+        panel_grid([(waste_panel, 6), (po_panel, 6)]),
         export_panel,
     ])

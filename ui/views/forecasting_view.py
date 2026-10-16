@@ -21,7 +21,7 @@ from ui.components.empty_state import empty_state
 from ui.components.feedback import banner, notify, notify_error
 from ui.components.forms import dropdown_field, text_field
 from ui.components.kpi_card import kpi_card
-from ui.components.layout import page_header, scroll_column, section
+from ui.components.layout import KPI_COL, flow_row, kpi_grid, page_header, scroll_column, section
 from ui.components.table import styled_table, text_cell
 
 _METHODS = [
@@ -66,7 +66,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
 
     state = {"product_id": products[0].id}
 
-    kpi_row = ft.Row(spacing=T.GAP)
+    kpi_row = kpi_grid([])
     note_holder = ft.Column(spacing=T.GAP_SMALL)
     chart_holder = ft.Column(spacing=T.GAP_SMALL)
     metrics_holder = ft.Column(spacing=0)
@@ -174,16 +174,18 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         # --- KPI cards ---
         kpi_row.controls = [
             kpi_card("Average daily demand", f"{result.average_daily_demand:g}",
-                     subtitle="units/day (last 28 days)", icon=ft.Icons.TIMELINE),
+                     subtitle="units/day (last 28 days)", icon=ft.Icons.TIMELINE,
+                     col=KPI_COL),
             kpi_card(f"Forecast \u00b7 next {len(result.points)} days", f"{result.total_qty:g}",
                      subtitle="units expected", icon=ft.Icons.STACKED_LINE_CHART,
-                     accent=T.ACCENT),
+                     accent=T.ACCENT, col=KPI_COL),
             kpi_card("Observed sales days", str(result.observed_days),
                      subtitle=f"minimum {Config.MIN_TRAINING_DAYS} for a model",
-                     icon=ft.Icons.CALENDAR_MONTH_OUTLINED),
+                     icon=ft.Icons.CALENDAR_MONTH_OUTLINED, col=KPI_COL),
             kpi_card("Method", "Baseline" if result.is_baseline else "XGBoost",
                      subtitle=result.method_label, icon=ft.Icons.MODEL_TRAINING_OUTLINED,
-                     accent=T.STATUS_INFO if result.is_baseline else T.STATUS_HEALTHY),
+                     accent=T.STATUS_INFO if result.is_baseline else T.STATUS_HEALTHY,
+                     col=KPI_COL),
         ]
 
         # --- Notes ---
@@ -284,11 +286,11 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         ],
     )
 
-    controls_row = ft.Row(
-        spacing=T.GAP,
-        controls=[product_dd, horizon_field, method_dd, ft.Container(expand=True)],
-        vertical_alignment=ft.CrossAxisAlignment.END,
-    )
+    controls_row = flow_row([
+        (product_dd, {"xs": 12, "sm": 6, "lg": 5}),
+        (horizon_field, {"xs": 12, "sm": 6, "lg": 2}),
+        (method_dd, {"xs": 12, "sm": 6, "lg": 4}),
+    ])
 
     load(regenerate=False)
 
