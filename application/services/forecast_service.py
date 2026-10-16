@@ -14,12 +14,11 @@ from datetime import date, timedelta
 
 from app.config import Config
 from application.dto import ForecastMetrics, ForecastPoint, ForecastResult
-from domain.exceptions import NotFoundError
+from domain.exceptions import NotFoundError, StockWiseError
 from ml import baseline as baselines
 from ml import evaluate as eval_metrics
+from ml.features import FEATURE_SCHEMA_VERSION
 from ml.preprocessing import DayPoint, observed_count, quantities, recent_average, to_daily_series
-
-FEATURE_SCHEMA_VERSION = "1"
 
 
 class ForecastService:
@@ -96,14 +95,18 @@ class ForecastService:
             )
         else:
             model_prediction = None
-            if method == "auto" and self.model_service is not None:
-                model_prediction = self.model_service.predict(product, series, horizon)
+            if method in ("auto", "xgboost") and self.model_service is not None:
+                model_prediction = self.model_service.predict(
+                    product, series, horizon, allow_candidate=(method == "xgboost")
+                )
             if model_prediction is not None:
                 chosen = "xgboost"
                 predicted = model_prediction
             else:
-                chosen = self._baseline_method(None if method == "auto" else method)
+                chosen = self._baseline_method(None if method in ("auto", "xgboost") else method)
                 predicted = baselines.forecast(chosen, values, horizon)
+                if method == "xgboost":
+                    note = "No trained model available \u2014 showing the baseline forecast instead."
 
         residual_std = self._residual_std(product_id, horizon, chosen)
 
@@ -217,6 +220,41 @@ class ForecastService:
             )
         return results
 
+    # -------------------------------------------------------------- model admin
+    def model_status(self) -> dict:
+        """Current state of the trained model (present / adopted / metrics)."""
+        if self.model_service is None:
+            return {"artifact_present": False, "available": False, "adopted": False, "metrics": {},
+                    "baseline_metrics": {}, "notes": "", "version": None, "trained_at": None}
+        return self.model_service.status()
+
+    def train_model(self, *, horizon: int | None = None, force: bool = False) -> dict:
+        """Train the pooled XGBoost model and record the run (admin operation)."""
+        if self.model_service is None:
+            raise StockWiseError("No model service is configured.")
+
+        horizon = self._horizon(horizon)
+        series_by_product = {
+            product.id: self.demand_series(product.id)
+            for product in self.products.list_all(active_only=True)
+        }
+        summary = self.model_service.train(series_by_product, horizon=horizon, force=force)
+        self.forecasts.create_model_run(
+            model_version=summary["version"],
+            model_type="xgboost",
+            metrics={
+                "model": summary.get("metrics", {}),
+                "baselines": summary.get("baseline_metrics", {}),
+                "adopted": summary.get("adopted", False),
+            },
+            artifact_path=summary.get("artifact_path"),
+            train_start=summary.get("train_start"),
+            train_end=summary.get("train_end"),
+            feature_schema_version=summary.get("feature_schema_version", FEATURE_SCHEMA_VERSION),
+            notes=summary.get("notes"),
+        )
+        return summary
+
     # ------------------------------------------------------------------ internal
     def _residual_std(self, product_id: int, horizon: int, method: str) -> float:
         """RMSE from the last holdout window, used as a sigma proxy for safety stock."""
@@ -227,11 +265,13 @@ class ForecastService:
 
 
 def _split_version(version: str) -> tuple[str, str, str]:
-    """``"baseline:seasonal_naive"`` \u2192 ``("seasonal_naive", "baseline", "seasonal_naive")``."""
+    """``"baseline:seasonal_naive"`` \u2192 ``("seasonal_naive", "baseline", ...)``."""
     kind, _, name = version.partition(":")
     if kind == "baseline":
         return (name or "seasonal_naive", "baseline", name)
-    return (name or kind, kind, name)
+    if kind == "xgboost":
+        return ("xgboost", "xgboost", name)
+    return (version, "", "")
 
 
 def _method_label(method: str) -> str:

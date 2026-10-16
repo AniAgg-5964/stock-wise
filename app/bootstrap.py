@@ -24,6 +24,7 @@ from application.services.dashboard_service import DashboardService
 from application.services.forecast_service import ForecastService
 from application.services.import_export_service import ImportExportService
 from application.services.inventory_service import InventoryService
+from application.services.model_service import ModelService
 from application.services.product_service import ProductService
 from application.services.sales_service import SalesService
 from application.services.supplier_service import SupplierService
@@ -60,6 +61,8 @@ def build_context(db: DatabaseConnection) -> SimpleNamespace:
         sales_service, supplier_service, audit,
     )
     forecast_service = ForecastService(db, forecast_repo, products, settings)
+    model_service = ModelService()
+    forecast_service.model_service = model_service
 
     return SimpleNamespace(
         db=db,
@@ -76,6 +79,7 @@ def build_context(db: DatabaseConnection) -> SimpleNamespace:
         sales_service=sales_service,
         import_export_service=import_export_service,
         forecast_service=forecast_service,
+        model_service=model_service,
         backup_service=BackupService(db),
         dashboard_service=DashboardService(product_service, inventory_service, sales_repo),
     )

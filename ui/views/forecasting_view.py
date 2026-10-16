@@ -29,7 +29,14 @@ _METHODS = [
     ("seasonal_naive", "Seasonal naive"),
     ("moving_average", "7-day moving average"),
     ("mean", "Average demand"),
+    ("xgboost", "XGBoost model (candidate)"),
 ]
+
+_BASELINE_LABELS = {
+    "seasonal_naive": "Seasonal naive (same weekday last week)",
+    "moving_average": "7-day moving average",
+    "mean": "Average demand",
+}
 
 
 def _day_label(iso: str) -> str:
@@ -62,6 +69,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
     note_holder = ft.Column(spacing=T.GAP_SMALL)
     chart_holder = ft.Column(spacing=T.GAP_SMALL)
     metrics_holder = ft.Column(spacing=0)
+    model_holder = ft.Column(spacing=T.GAP_SMALL)
     table_holder = ft.Column(spacing=0)
     method_text = ft.Text("", size=T.FONT_TINY, color=T.TEXT_TERTIARY)
 
@@ -77,6 +85,68 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
             return max(1, min(60, int(float((horizon_field.value or "").strip()))))
         except (TypeError, ValueError):
             return Config.DEFAULT_FORECAST_HORIZON
+
+    def render_model() -> None:
+        status = app.forecast_service.model_status()
+        controls: list[ft.Control] = []
+        if not status.get("artifact_present"):
+            controls.append(banner(
+                "No trained model yet \u2014 forecasts use a transparent baseline. "
+                "Train a model to compare it honestly on holdout data.",
+                "info",
+            ))
+            model_holder.controls = controls
+            return
+
+        adopted = bool(status.get("adopted"))
+        controls.append(banner(
+            "XGBoost model adopted and in use."
+            if adopted
+            else "Model trained but not adopted \u2014 the baseline performed better on holdout.",
+            "success" if adopted else "warning",
+        ))
+
+        rows: list[ft.DataRow] = []
+        model_metrics = status.get("metrics") or {}
+        if model_metrics:
+            rows.append(ft.DataRow(cells=[
+                text_cell("XGBoost", color=T.ACCENT),
+                text_cell(f"{model_metrics.get('mae', 0):.2f}"),
+                text_cell(format_wape(model_metrics.get("wape"))),
+                text_cell(f"{model_metrics.get('bias', 0):+.2f}", color=T.TEXT_SECONDARY),
+                text_cell(str(model_metrics.get("n", 0)), color=T.TEXT_SECONDARY),
+            ]))
+        for name, m in (status.get("baseline_metrics") or {}).items():
+            rows.append(ft.DataRow(cells=[
+                text_cell(_BASELINE_LABELS.get(name, name)),
+                text_cell(f"{m.get('mae', 0):.2f}"),
+                text_cell(format_wape(m.get("wape"))),
+                text_cell(f"{m.get('bias', 0):+.2f}", color=T.TEXT_SECONDARY),
+                text_cell(str(m.get("n", 0)), color=T.TEXT_SECONDARY),
+            ]))
+        controls.append(styled_table(["Model", "MAE (units)", "WAPE", "Bias", "Days tested"], rows))
+        if status.get("trained_at"):
+            controls.append(ft.Text(
+                f"Trained {status['trained_at']} \u00b7 {status.get('version') or ''} \u00b7 {status.get('notes', '')}",
+                size=T.FONT_TINY, color=T.TEXT_TERTIARY,
+            ))
+        model_holder.controls = controls
+
+    def train_model(e) -> None:
+        notify(page, "Training model\u2026 this can take a few seconds.", "info")
+        try:
+            summary = app.forecast_service.train_model(horizon=_horizon())
+        except (StockWiseError, ValueError) as exc:
+            notify_error(page, exc)
+            return
+        notify(
+            page,
+            "Model trained and adopted." if summary.get("adopted")
+            else "Model trained but not adopted \u2014 baseline is better.",
+            "success" if summary.get("adopted") else "warning",
+        )
+        render_model()
+        page.update()
 
     def load(*, regenerate: bool) -> None:
         pid = state["product_id"]
@@ -168,6 +238,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         ]
         table_holder.controls = [styled_table(["Date", "Predicted units"], forecast_rows)]
 
+        render_model()
         page.update()
 
     product_dd = dropdown_field(
@@ -210,5 +281,12 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
                 subtitle=None),
         method_text,
         section("Baseline accuracy (chronological holdout)", metrics_holder),
+        section(
+            "Model",
+            model_holder,
+            subtitle="XGBoost is adopted only when it beats the baseline on holdout data",
+            actions=[ft.OutlinedButton(content="Train model", icon=ft.Icons.MODEL_TRAINING,
+                                       on_click=train_model)],
+        ),
         section("Forecast detail", table_holder),
     ])
