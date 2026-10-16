@@ -51,8 +51,9 @@ copy .env.example .env      # then edit .env
 ## Seed demo data
 
 Populate a realistic grocery/convenience dataset (15 products, 5 suppliers,
-60 days of demand history, opening stock, expiry batches). Idempotent — it does
-nothing if products already exist unless `--reset` is given.
+60 days of demand history including a few simulated stockout days, opening stock,
+expiry batches). Idempotent — it does nothing if products already exist unless
+`--reset` is given.
 
 ```powershell
 .venv\Scripts\python.exe scripts\seed_demo_data.py           # seed
@@ -74,13 +75,34 @@ whenever the model is missing or worse than the baseline):
 | **Dashboard** | Stock value, low/out-of-stock counts, expiry and demand-spike alerts, sales-vs-forecast chart, top products by predicted demand. |
 | **Inventory** | Products, batches, stock ledger, receive/adjust stock, product detail with history. |
 | **Sales** | Record sales (atomic: sale + stock movement in one transaction) and import sales history. |
-| **Forecasting** | Generate forecasts (baselines + XGBoost), see accuracy vs baselines, train the model. |
+| **Forecasting** | Generate forecasts (baselines + XGBoost), see accuracy vs baselines, the likely range around each day, and train the model. |
 | **Reorder Center** | Periodic-review recommendations with a "Why?" breakdown (P = L + R, safety stock, inventory position, MOQ/pack, budget), and recording the order you decide to place. |
 | **Expiry Management** | Batches by expiry, FEFO-aware "at risk" estimates, estimated value at risk, waste write-off. |
 | **Supplier Research** | Supplier records and product links (lead time, MOQ, pack, cost). Live web research is the optional TinyFish stage. |
 | **Reports** | Sales/margin, top products, stock valuation, forecast accuracy, waste, open purchase orders — all exportable to CSV. |
 | **Data & Imports** | Validated CSV import (row-level errors) and CSV export. |
-| **Settings** | Store preferences, reorder policy, budget, forecast model management, backups, diagnostics. |
+| **Settings** | Store preferences, baseline fallback, safety-stock policy and service level, budget, forecast model management, backups, diagnostics. |
+
+## Forecasting & statistics
+
+- **Model.** A pooled XGBoost regressor (one model across all products, `product_id`
+  as a feature) with leakage-safe lag/rolling/calendar features. It is trained
+  locally on your own demand history and **adopted only when it beats or matches
+  the best baseline on a chronological holdout** (WAPE). Otherwise the baseline is
+  used; a clearly-labelled candidate option can force the model for inspection.
+- **Fallback baseline.** When no adopted model applies, the product's most accurate
+  baseline on the holdout is used automatically (`seasonal_naive`,
+  `moving_average`, or `mean`). This can be pinned to a single method in Settings.
+- **Prediction intervals.** Each forecast day carries a likely range of
+  `± z · σ · √h`, where `σ` is the holdout residual standard deviation and `h` is
+  the step. The width grows with the horizon and is shown in the forecast table.
+- **Censored demand.** Days the shop was out of stock (`stockout_flag`) understate
+  real demand, so they are corrected before model training using the same-weekday
+  observed average — a stockout is never learned as a genuine demand drop.
+- **Safety stock.** Either the *heuristic* policy (`average demand × buffer days`)
+  or the *statistical* policy (`z · σ_P`, `σ_P = σ · √P` for the protection period
+  `P = L + R`) at a configurable service level. Both respect the product's
+  configured minimum, and the Reorder Centre explains which one it used.
 
 ## Packaging (Windows executable)
 

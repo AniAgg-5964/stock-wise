@@ -15,9 +15,26 @@ from app.config import Config
 from app.theme import StockWiseTheme as T
 from repositories.sqlite.schema import SCHEMA_VERSION, get_schema_version
 from ui.components.feedback import notify, notify_error
-from ui.components.forms import text_field
+from ui.components.forms import dropdown_field, text_field
 from ui.components.layout import page_header, scroll_column, section
 from ui.components.table import action_cell, styled_table, text_cell
+
+_BASELINE_OPTIONS = [
+    ("best", "Best baseline per product"),
+    ("seasonal_naive", "Seasonal naive (same weekday)"),
+    ("moving_average", "7-day moving average"),
+    ("mean", "Average demand"),
+]
+
+_SAFETY_POLICY_OPTIONS = [
+    ("heuristic", "Heuristic (average demand x buffer days)"),
+    ("statistical", "Statistical (service level x variability)"),
+]
+
+_SERVICE_LEVEL_OPTIONS = [
+    ("0.80", "80%"), ("0.85", "85%"), ("0.90", "90% (default)"),
+    ("0.95", "95%"), ("0.98", "98%"), ("0.99", "99%"),
+]
 
 
 def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Control:
@@ -39,8 +56,22 @@ def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Co
                                       value=settings.get("purchase_budget", ""), width=220),
     }
 
+    policy_fields = {
+        "forecast_baseline_method": dropdown_field(
+            "Baseline fallback", _BASELINE_OPTIONS,
+            value=settings.get("forecast_baseline_method", "best"), width=320),
+        "safety_policy": dropdown_field(
+            "Safety-stock policy", _SAFETY_POLICY_OPTIONS,
+            value=settings.get("safety_policy", "heuristic"), width=340),
+        "service_level": dropdown_field(
+            "Service level (intervals & safety stock)", _SERVICE_LEVEL_OPTIONS,
+            value=settings.get("service_level", "0.90"), width=320),
+    }
+
     def save(e) -> None:
         for key, field in fields.items():
+            app.settings.set(key, (field.value or "").strip())
+        for key, field in policy_fields.items():
             app.settings.set(key, (field.value or "").strip())
         notify(page, "Settings saved", "success")
 
@@ -52,6 +83,10 @@ def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Co
                 fields["forecast_horizon_days"], fields["review_period_days"],
                 fields["safety_buffer_days"], fields["near_expiry_window_days"],
                 fields["purchase_budget"],
+            ]),
+            ft.Row(spacing=T.GAP_SMALL, wrap=True, controls=[
+                policy_fields["forecast_baseline_method"], policy_fields["safety_policy"],
+                policy_fields["service_level"],
             ]),
             ft.Text("These preferences drive forecasting, reorder recommendations and expiry alerts.",
                     size=T.FONT_TINY, color=T.TEXT_TERTIARY),

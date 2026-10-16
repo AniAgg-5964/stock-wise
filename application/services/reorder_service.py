@@ -22,7 +22,9 @@ from domain.reorder import (
     demand_over_period,
     protection_period,
     safety_stock_heuristic,
+    safety_stock_statistical,
 )
+from domain.service_level import parse_service_level, z_for_service_level
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +77,52 @@ class ReorderService:
 
     def _near_expiry_window(self) -> int:
         return self._setting_int("near_expiry_window_days", Config.NEAR_EXPIRY_WINDOW_DAYS)
+
+    def _safety_policy(self) -> str:
+        if self.settings is not None:
+            value = (self.settings.get("safety_policy") or "").strip().lower()
+            if value in ("heuristic", "statistical"):
+                return value
+        return Config.DEFAULT_SAFETY_POLICY
+
+    def _service_level(self) -> float:
+        value = self.settings.get("service_level") if self.settings is not None else None
+        return parse_service_level(value, Config.DEFAULT_SERVICE_LEVEL)
+
+    def _safety_stock(
+        self,
+        product,
+        *,
+        avg_daily: float,
+        protection_days: int,
+        residual_std: float,
+        buffer_days_override: int | None,
+    ) -> tuple[float, str]:
+        """Resolve safety stock under the configured policy; return ``(ss, note)``.
+
+        Statistical (``z x sigma_P``) is used only when demand variability has
+        actually been estimated; otherwise it degrades honestly to the heuristic.
+        The product's configured minimum safety stock is always respected.
+        """
+        floor = float(product.safety_stock or 0.0)
+        heuristic = safety_stock_heuristic(
+            avg_daily, self._safety_buffer_days(buffer_days_override), configured_minimum=floor
+        )
+        if self._safety_policy() != "statistical":
+            return heuristic, ""
+        sigma = max(0.0, float(residual_std or 0.0))
+        if sigma <= 0:
+            return heuristic, (
+                "Statistical safety stock requested, but demand variability is not yet "
+                "estimated \u2014 used the buffer-days heuristic instead."
+            )
+        level = self._service_level()
+        z = z_for_service_level(level)
+        statistical = max(safety_stock_statistical(sigma, protection_days, z), floor)
+        return statistical, (
+            f"Statistical safety stock for a {level:.0%} service level "
+            f"(z={z:g}, \u03c3\u2248{sigma:g}/day over {protection_days} days)."
+        )
 
     def _budget(self, override) -> Decimal | None:
         if override is not None:
@@ -129,8 +177,12 @@ class ReorderService:
         incoming = self.purchase_orders.confirmed_incoming_qty(product_id)
         at_risk = self._at_risk_expiry(product_id, daily)
 
-        safety_stock = safety_stock_heuristic(
-            avg_daily, self._safety_buffer_days(safety_buffer_days), configured_minimum=product.safety_stock
+        safety_stock, policy_note = self._safety_stock(
+            product,
+            avg_daily=avg_daily,
+            protection_days=horizon,
+            residual_std=getattr(result, "residual_std", 0.0),
+            buffer_days_override=safety_buffer_days,
         )
 
         context = ReorderContext(
@@ -151,6 +203,7 @@ class ReorderService:
             budget=self._budget(budget),
             supplier_id=supplier.id if supplier else None,
             supplier_name=supplier.name if supplier else None,
+            policy_note=policy_note,
         )
         return compute(context)
 

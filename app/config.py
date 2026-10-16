@@ -80,12 +80,20 @@ class Config:
     DEFAULT_FORECAST_HORIZON: int = 7
     MIN_TRAINING_DAYS: int = 14
     BASELINE_LOOKBACK_WEEKS: int = 4
+    # "best" picks the most accurate baseline per product on the holdout; a named
+    # method pins one specific baseline instead.
+    DEFAULT_BASELINE_METHOD: str = "best"
+    # Prediction-interval / statistical safety-stock target service level.
+    DEFAULT_SERVICE_LEVEL: float = 0.90
 
     # --- Inventory / reorder defaults ---
     DEFAULT_SAFETY_BUFFER_DAYS: int = 2
     DEFAULT_REVIEW_PERIOD_DAYS: int = 2
     DEFAULT_LEAD_TIME_DAYS: int = 3
     NEAR_EXPIRY_WINDOW_DAYS: int = 7
+    # "heuristic" = average demand x buffer days (default); "statistical" =
+    # z x residual sigma over the protection period.
+    DEFAULT_SAFETY_POLICY: str = "heuristic"
 
     # --- TinyFish (optional supplier research) ---
     TINYFISH_API_KEY: str = os.getenv("TINYFISH_API_KEY", "")

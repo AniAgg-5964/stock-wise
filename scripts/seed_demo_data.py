@@ -153,7 +153,11 @@ def _seed(days_of_history: int = 60) -> None:
     )
 
     # --- Demand history (direct writes; baseline pattern with weekend bumps) ---
+    # A small share of days are simulated as "out of stock": sales were capped at
+    # the little that was left, so recorded units understate true demand. That lets
+    # the demand pipeline (and the model) exercise stockout-censoring handling.
     rng = random.Random(42)
+    stockout_days = 0
     with db.get_connection() as conn:
         for offset in range(days_of_history, 0, -1):
             day = today - timedelta(days=offset)
@@ -163,11 +167,18 @@ def _seed(days_of_history: int = 60) -> None:
                 if weekend:
                     base *= 1.4
                 quantity = round(max(0.0, base + rng.uniform(-base * 0.4, base * 0.4)), 1)
+                stockout = rng.random() < 0.03
+                if stockout:
+                    # Shelf was empty: most demand went unserved.
+                    quantity = round(quantity * rng.uniform(0.0, 0.2), 1)
+                    stockout_days += 1
                 conn.execute(
                     """INSERT INTO daily_demand (demand_date, product_id, quantity_sold, observed_flag, stockout_flag)
-                       VALUES (?, ?, ?, 1, 0)
-                       ON CONFLICT(demand_date, product_id) DO UPDATE SET quantity_sold = excluded.quantity_sold""",
-                    (day.isoformat(), product.id, quantity),
+                       VALUES (?, ?, ?, 1, ?)
+                       ON CONFLICT(demand_date, product_id) DO UPDATE SET
+                           quantity_sold = excluded.quantity_sold,
+                           stockout_flag = excluded.stockout_flag""",
+                    (day.isoformat(), product.id, quantity, int(stockout)),
                 )
 
     # --- A few real sales today (exercise the live ledger + movement feed) ---
@@ -188,7 +199,7 @@ def _seed(days_of_history: int = 60) -> None:
 
     ctx.audit.record_event("demo_seeded", "system", None, {"days_of_history": days_of_history}, "seed")
     print(f"Seeded {len(product_by_sku)} products, {len(supplier_by_name)} suppliers, "
-          f"{days_of_history} days of demand history.")
+          f"{days_of_history} days of demand history ({stockout_days} stockout day(s)).")
     print(f"Database: {db.db_path}")
 
 

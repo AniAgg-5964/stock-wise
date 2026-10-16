@@ -104,6 +104,7 @@ class ForecastResult:
     average_daily_demand: float = 0.0
     observed_days: int = 0
     residual_std: float = 0.0
+    interval_level: float | None = None
     note: str = ""
     points: list[ForecastPoint] = field(default_factory=list)
 

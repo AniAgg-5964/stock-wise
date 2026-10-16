@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 from ml import baseline, evaluate
-from ml.preprocessing import observed_count, quantities, to_daily_series
+from ml.preprocessing import impute_censored, observed_count, quantities, to_daily_series
 
 
 class TestBaselines:
@@ -70,3 +70,35 @@ class TestPreprocessing:
     def test_daily_series_extends_to_end_without_history(self):
         series = to_daily_series([], end="2026-02-01")
         assert len(series) == 1 and series[0].quantity == 0.0
+
+    def test_stockout_days_are_flagged(self):
+        series = to_daily_series(
+            [("2026-01-01", 5), ("2026-01-02", 1), ("2026-01-03", 7)],
+            stockout_dates={"2026-01-02"},
+        )
+        assert [p.stockout for p in series] == [False, True, False]
+
+    def test_impute_censored_uses_same_weekday_mean(self):
+        # 2026-01-01 and 2026-01-08 are both a Thursday; the second is censored.
+        series = to_daily_series(
+            [("2026-01-01", 10.0), ("2026-01-08", 1.0)],
+            stockout_dates={"2026-01-08"},
+        )
+        imputed = {p.date: p for p in impute_censored(series)}
+
+        assert imputed["2026-01-08"].quantity == 10.0  # raised to the Thursday mean
+        assert imputed["2026-01-08"].stockout is True
+        assert imputed["2026-01-08"].imputed is True
+        assert imputed["2026-01-01"].imputed is False
+
+    def test_impute_censored_never_lowers_recorded_sales(self):
+        series = to_daily_series(
+            [("2026-01-01", 10.0), ("2026-01-08", 50.0)],
+            stockout_dates={"2026-01-08"},
+        )
+        imputed = {p.date: p for p in impute_censored(series)}
+        assert imputed["2026-01-08"].quantity == 50.0
+
+    def test_impute_censored_is_a_noop_without_stockouts(self):
+        series = to_daily_series([("2026-01-01", 5.0)])
+        assert impute_censored(series) == list(series)

@@ -38,6 +38,38 @@ class SqliteForecastRepository(SqliteRepository):
             rows = c.execute(sql, tuple(params)).fetchall()
         return [(r["demand_date"], float(r["quantity_sold"])) for r in rows]
 
+    def get_demand_history_full(
+        self,
+        product_id: int,
+        *,
+        start: str | None = None,
+        end: str | None = None,
+        conn: sqlite3.Connection | None = None,
+    ) -> list[tuple[str, float, bool]]:
+        """Return ``(date, quantity, stockout)`` triples, oldest first.
+
+        The stockout flag lets the ML pipeline tell a demand-drop from a day the
+        shop had nothing to sell (censored demand).
+        """
+        sql = (
+            "SELECT demand_date, quantity_sold, stockout_flag "
+            "FROM daily_demand WHERE product_id = ?"
+        )
+        params: list = [product_id]
+        if start:
+            sql += " AND demand_date >= ?"
+            params.append(start)
+        if end:
+            sql += " AND demand_date <= ?"
+            params.append(end)
+        sql += " ORDER BY demand_date"
+        with self._conn(conn) as c:
+            rows = c.execute(sql, tuple(params)).fetchall()
+        return [
+            (r["demand_date"], float(r["quantity_sold"]), bool(r["stockout_flag"]))
+            for r in rows
+        ]
+
     def count_demand_days(self, product_id: int, conn: sqlite3.Connection | None = None) -> int:
         with self._conn(conn) as c:
             row = c.execute(

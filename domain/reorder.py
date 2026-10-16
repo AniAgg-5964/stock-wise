@@ -52,6 +52,7 @@ class ReorderContext:
     budget: Decimal | None = None
     supplier_id: int | None = None
     supplier_name: str | None = None
+    policy_note: str = ""                 # how safety stock was derived (auditable)
 
 
 @dataclass
@@ -273,6 +274,8 @@ def compute(context: ReorderContext) -> ReorderRecommendation:
             f"{context.at_risk_expiry:g} {context.unit} may expire before it sells \u2014 "
             "consider markdown or transfer before ordering more."
         )
+    if context.policy_note:
+        notes.insert(0, context.policy_note)
     if not notes:
         notes.append("Position covers the protection period; no order suggested.")
 

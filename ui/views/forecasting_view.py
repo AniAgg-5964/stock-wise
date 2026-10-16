@@ -26,6 +26,7 @@ from ui.components.table import styled_table, text_cell
 
 _METHODS = [
     ("auto", "Automatic (best available)"),
+    ("best", "Best baseline for this product"),
     ("seasonal_naive", "Seasonal naive"),
     ("moving_average", "7-day moving average"),
     ("mean", "Average demand"),
@@ -192,8 +193,10 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
                                 "warning"))
         elif result.is_baseline:
             notes.append(banner(
-                "Transparent baseline forecast. A trained model is used automatically once "
-                "it beats the baseline on holdout data.", "info",
+                result.note
+                or "Transparent baseline forecast. A trained model is used automatically once "
+                   "it beats the baseline on holdout data.",
+                "info",
             ))
         note_holder.controls = notes
 
@@ -229,14 +232,31 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         ]
 
         # --- Forecast table ---
-        forecast_rows = [
-            ft.DataRow(cells=[
-                text_cell(p.target_date),
-                text_cell(f"{p.predicted_qty:g}"),
-            ])
-            for p in result.points
-        ]
-        table_holder.controls = [styled_table(["Date", "Predicted units"], forecast_rows)]
+        has_bounds = any(p.lower_bound is not None for p in result.points)
+        range_header = (
+            f"Likely range ({result.interval_level:.0%})"
+            if has_bounds and result.interval_level
+            else "Likely range"
+        )
+        forecast_rows = []
+        for p in result.points:
+            cells = [text_cell(p.target_date), text_cell(f"{p.predicted_qty:g}")]
+            if has_bounds:
+                cells.append(text_cell(
+                    f"{p.lower_bound:g} \u2013 {p.upper_bound:g}"
+                    if p.lower_bound is not None else "\u2014",
+                    color=T.TEXT_SECONDARY,
+                ))
+            forecast_rows.append(ft.DataRow(cells=cells))
+        headers = ["Date", "Predicted units"] + ([range_header] if has_bounds else [])
+        table_holder.controls = [styled_table(headers, forecast_rows)]
+        if has_bounds:
+            notes.append(ft.Text(
+                "The range is the forecast \u00b1 the estimated uncertainty, widening with the "
+                "horizon. It is used for the statistical safety-stock policy.",
+                size=T.FONT_TINY, color=T.TEXT_TERTIARY,
+            ))
+            note_holder.controls = notes
 
         render_model()
         page.update()
