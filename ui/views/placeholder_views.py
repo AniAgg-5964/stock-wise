@@ -36,7 +36,7 @@ def build_placeholder_view(
                 border_radius=T.RADIUS,
                 border=ft.Border.all(1, T.BORDER_SUBTLE),
                 content=empty_state(
-                    "Coming soon",
+                    t("coming_soon"),
                     "This screen is part of a later stage and is not implemented yet.",
                     icon=icon,
                 ),

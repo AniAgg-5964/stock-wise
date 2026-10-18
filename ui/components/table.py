@@ -20,6 +20,7 @@ from typing import Callable, Optional
 import flet as ft
 
 from app.theme import StockWiseTheme as T
+from app.i18n import t
 from ui.components.status_chip import status_chip
 
 
@@ -83,14 +84,14 @@ def styled_table(
     rows: list[ft.DataRow],
     *,
     column_spacing: int = 22,
-    empty_message: str = "No records",
+    empty_message: str | None = None,
 ) -> ft.Control:
     """Build a themed DataTable, or an empty message when there are no rows."""
     if not rows:
         return ft.Container(
             padding=T.CARD_PADDING,
             alignment=ft.Alignment.CENTER,
-            content=ft.Text(empty_message, size=T.FONT_BODY, color=T.TEXT_TERTIARY),
+            content=ft.Text(empty_message or t("table.no_records"), size=T.FONT_BODY, color=T.TEXT_TERTIARY),
         )
     table = ft.DataTable(
         columns=[

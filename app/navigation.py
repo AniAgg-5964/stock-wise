@@ -18,28 +18,30 @@ from typing import Callable
 
 import flet as ft
 
+from app.i18n import t
 from app.theme import StockWiseTheme as T
 
-# (group heading, [(route, label, icon), ...]). The group heading is only shown
-# when the sidebar is expanded.
+# (group heading key, [(route, label key, icon), ...]). Labels are translation
+# *keys*, not English text: the sidebar is the one screen a shopkeeper reads on
+# every visit, so it has to resolve at build time in whichever language is active.
 NAV_GROUPS: list[tuple[str, list[tuple[str, str, str]]]] = [
     ("", [
-        ("/", "Dashboard", ft.Icons.SPACE_DASHBOARD_OUTLINED),
+        ("/", "nav.dashboard", ft.Icons.SPACE_DASHBOARD_OUTLINED),
     ]),
-    ("Your shop", [
-        ("/inventory", "Inventory", ft.Icons.INVENTORY_2_OUTLINED),
-        ("/sales", "Sales", ft.Icons.POINT_OF_SALE_OUTLINED),
-        ("/expiry", "Expiry Management", ft.Icons.EVENT_BUSY_OUTLINED),
+    ("nav.group.shop", [
+        ("/inventory", "nav.inventory", ft.Icons.INVENTORY_2_OUTLINED),
+        ("/sales", "nav.sales", ft.Icons.POINT_OF_SALE_OUTLINED),
+        ("/expiry", "nav.expiry", ft.Icons.EVENT_BUSY_OUTLINED),
     ]),
-    ("Decisions", [
-        ("/forecasting", "Forecasting", ft.Icons.INSIGHTS_OUTLINED),
-        ("/reorder", "Reorder Center", ft.Icons.SHOPPING_CART_CHECKOUT_OUTLINED),
-        ("/suppliers", "Supplier Research", ft.Icons.STOREFRONT_OUTLINED),
+    ("nav.group.decisions", [
+        ("/forecasting", "nav.forecasting", ft.Icons.INSIGHTS_OUTLINED),
+        ("/reorder", "nav.reorder", ft.Icons.SHOPPING_CART_CHECKOUT_OUTLINED),
+        ("/suppliers", "nav.suppliers", ft.Icons.STOREFRONT_OUTLINED),
     ]),
-    ("More", [
-        ("/reports", "Reports", ft.Icons.BAR_CHART_OUTLINED),
-        ("/data", "Data & Imports", ft.Icons.SWAP_VERT),
-        ("/settings", "Settings", ft.Icons.SETTINGS_OUTLINED),
+    ("nav.group.more", [
+        ("/reports", "nav.reports", ft.Icons.BAR_CHART_OUTLINED),
+        ("/data", "nav.data", ft.Icons.SWAP_VERT),
+        ("/settings", "nav.settings", ft.Icons.SETTINGS_OUTLINED),
     ]),
 ]
 
@@ -59,9 +61,9 @@ def shop_name() -> str:
     try:
         from app.bootstrap import app_context
 
-        return (app_context.settings.get("shop_name") or "").strip() or "My Store"
+        return (app_context.settings.get("shop_name") or "").strip() or t("brand.my_store")
     except Exception:  # never block the chrome on a settings read
-        return "My Store"
+        return t("brand.my_store")
 
 
 def _brand_header(collapsed: bool) -> ft.Control:
@@ -93,12 +95,12 @@ def _brand_header(collapsed: bool) -> ft.Control:
                     expand=True,
                     controls=[
                         ft.Text(
-                            "StockWise", size=T.FONT_SUBTITLE, weight=ft.FontWeight.BOLD,
+                            t("brand.name"), size=T.FONT_SUBTITLE, weight=ft.FontWeight.BOLD,
                             color=T.SIDEBAR_TEXT_ACTIVE, font_family=T.FONT_FAMILY_BOLD,
                             no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS,
                         ),
                         ft.Text(
-                            "Smarter Stock. Less Waste.", size=T.FONT_TINY,
+                            t("brand.tagline"), size=T.FONT_TINY,
                             color=T.SIDEBAR_MUTED, no_wrap=True,
                             overflow=ft.TextOverflow.ELLIPSIS,
                         ),
@@ -109,7 +111,8 @@ def _brand_header(collapsed: bool) -> ft.Control:
     )
 
 
-def _group_heading(text: str, collapsed: bool) -> ft.Control | None:
+def _group_heading(key: str, collapsed: bool) -> ft.Control | None:
+    text = t(key)
     if collapsed or not text:
         return None
     return ft.Container(
@@ -215,7 +218,7 @@ def _store_card(collapsed: bool, shop_name: str) -> ft.Control:
                                 ft.Text(shop_name, size=T.FONT_SMALL, weight=ft.FontWeight.W_600,
                                         color=T.SIDEBAR_TEXT_ACTIVE, no_wrap=True,
                                         overflow=ft.TextOverflow.ELLIPSIS),
-                                ft.Text("Single store", size=T.FONT_TINY, color=T.SIDEBAR_MUTED),
+                                ft.Text(t("brand.single_store"), size=T.FONT_TINY, color=T.SIDEBAR_MUTED),
                             ],
                         ),
                     ],
@@ -224,7 +227,7 @@ def _store_card(collapsed: bool, shop_name: str) -> ft.Control:
                     spacing=8,
                     controls=[
                         ft.Container(width=8, height=8, border_radius=4, bgcolor=T.STATUS_HEALTHY),
-                        ft.Text("Working offline", size=T.FONT_TINY, color=T.SIDEBAR_TEXT,
+                        ft.Text(t("brand.offline"), size=T.FONT_TINY, color=T.SIDEBAR_TEXT,
                                 weight=ft.FontWeight.W_500),
                     ],
                 ),
@@ -253,8 +256,8 @@ def build_sidebar(
             ft.Column(
                 spacing=0,
                 controls=[
-                    _nav_item(route, label, icon, effective_route, on_navigate, collapsed)
-                    for route, label, icon in items
+                    _nav_item(route, t(key), icon, effective_route, on_navigate, collapsed)
+                    for route, key, icon in items
                 ],
             )
         )

@@ -14,6 +14,7 @@ import flet as ft
 
 from app.bootstrap import app_context
 from app.theme import StockWiseTheme as T
+from app.i18n import t
 from domain.entities import Sale, SaleItem
 from domain.exceptions import InsufficientStockError, StockWiseError
 from domain.money import format_money, to_money
@@ -42,13 +43,13 @@ def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Contr
                 text_cell(f"{line['qty']:g}"),
                 text_cell(format_money(line["price"]), color=T.TEXT_SECONDARY),
                 text_cell(format_money(to_money(line["price"]) * Decimal(str(line["qty"])))),
-                action_cell(lambda e, idx=idx: remove_line(idx), icon=ft.Icons.CLOSE, tooltip="Remove"),
+                action_cell(lambda e, idx=idx: remove_line(idx), icon=ft.Icons.CLOSE, tooltip=t("action.remove")),
             ])
             for idx, line in enumerate(cart)
         ]
         cart_holder.controls = [
-            styled_table(["Product", "Qty", "Unit price", "Line total", ""], rows,
-                         empty_message="Cart is empty \u2014 add a product to begin.")
+            styled_table([t("col.product"), "Qty", "Unit price", "Line total", ""], rows,
+                         empty_message=t("empty.cart"))
         ]
         total = sum((to_money(l["price"]) * Decimal(str(l["qty"])) for l in cart), Decimal("0"))
         total_text.value = format_money(total)
@@ -61,25 +62,25 @@ def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Contr
             render_cart()
 
     product_dd = dropdown_field(
-        "Product",
+        t("col.product"),
         [(str(p.id), f"{p.name} \u00b7 {usable[p.id]:g} usable") for p in products]
         or [("__none__", "No products yet")],
         value=str(products[0].id) if products else "__none__", width=340,
         on_select=lambda e: _prefill_price(e, price_by_id, price_field),
     )
-    price_field = text_field("Unit price (blank = product price)", width=200)
-    qty_field = text_field("Quantity", value="1", width=140)
-    date_field = text_field("Sale date/time (optional)", hint="YYYY-MM-DD HH:MM:SS", width=250)
-    notes_field = text_field("Notes (optional)", width=250)
+    price_field = text_field(t("field.unit_price"), width=200)
+    qty_field = text_field(t("field.quantity"), value="1", width=140)
+    date_field = text_field(t("field.sale_datetime"), hint=t("hint.datetime"), width=250)
+    notes_field = text_field(t("field.notes_optional"), width=250)
     override = ft.Checkbox(
-        label="Allow overselling (audited override)",
+        label=t("field.oversell"),
         value=False,
         label_style=ft.TextStyle(color=T.TEXT_SECONDARY, size=T.FONT_SMALL),
     )
 
     def add_to_cart(e) -> None:
         if not products or product_dd.value == "__none__":
-            notify(page, "Add a product first", "warning")
+            notify(page, t("empty.add_product_first"), "warning")
             return
         product = next((p for p in products if str(p.id) == product_dd.value), None)
         if product is None:
@@ -91,7 +92,7 @@ def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Contr
             price = (price_field.value or "").strip()
             unit_price = to_money(price) if price else product.selling_price
         except (ValueError, InvalidOperation):
-            notify(page, "Enter a valid quantity", "error")
+            notify(page, t("empty.invalid_qty"), "error")
             return
         cart.append({"product_id": product.id, "name": product.name, "qty": qty, "price": unit_price})
         qty_field.value = "1"
@@ -100,7 +101,7 @@ def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Contr
 
     def record(e) -> None:
         if not cart:
-            notify(page, "Cart is empty", "warning")
+            notify(page, t("empty.cart_short"), "warning")
             return
         sale = Sale(
             sold_at=(date_field.value or "").strip() or None,
@@ -120,20 +121,20 @@ def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Contr
     render_cart(update=False)
 
     new_sale = section(
-        "Record a sale",
+        t("panel.record_sale"),
         ft.Column(spacing=T.GAP, controls=[
-            flow_row([product_dd, qty_field, price_field, ft.Button(content="Add to cart", icon=ft.Icons.ADD, on_click=add_to_cart)]),
+            flow_row([product_dd, qty_field, price_field, ft.Button(content=t("action.add_to_cart"), icon=ft.Icons.ADD, on_click=add_to_cart)]),
             cart_holder,
             ft.Row(controls=[
-                ft.Text("Total", size=T.FONT_SMALL, color=T.TEXT_SECONDARY),
+                ft.Text(t("label.total"), size=T.FONT_SMALL, color=T.TEXT_SECONDARY),
                 ft.Container(expand=True),
                 total_text,
             ]),
             flow_row([date_field, notes_field], col={"xs": 12, "sm": 6, "lg": 6}),
             override,
             ft.Row(spacing=T.GAP_SMALL, controls=[
-                ft.Button(content="Record sale", icon=ft.Icons.CHECK, on_click=record),
-                ft.OutlinedButton(content="Clear cart", on_click=lambda e: (cart.clear(), render_cart())),
+                ft.Button(content=t("action.record_sale"), icon=ft.Icons.CHECK, on_click=record),
+                ft.OutlinedButton(content=t("action.clear_cart"), on_click=lambda e: (cart.clear(), render_cart())),
             ]),
         ]),
     )
@@ -151,14 +152,14 @@ def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Contr
         for sale in recent
     ]
     recent_panel = section(
-        "Recent sales",
-        styled_table(["Sale", "When", "Source", "Items", "Total", "Reference"], recent_rows,
-                     empty_message="No sales recorded yet."),
+        t("panel.recent_sales"),
+        styled_table(["Sale", "When", "Source", "Items", t("label.total"), "Reference"], recent_rows,
+                     empty_message=t("empty.no_sales")),
         subtitle=f"Latest {len(recent_rows)} sales",
     )
 
     return scroll_column([
-        page_header("Sales", "Record counter sales and review recent transactions"),
+        page_header(t("nav.sales"), t("dashboard.sales_subtitle")),
         new_sale,
         recent_panel,
     ])

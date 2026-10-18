@@ -13,6 +13,7 @@ import flet as ft
 
 from app.bootstrap import app_context
 from app.theme import StockWiseTheme as T
+from app.i18n import t
 from domain.entities import Product
 from domain.exceptions import StockWiseError
 from domain.money import format_money
@@ -127,14 +128,14 @@ def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
                     text_cell(format_money(product.selling_price), color=T.TEXT_SECONDARY),
                     chip_cell(_STATUS_LABELS.get(snap.status, snap.status), snap.status),
                     action_cell(lambda e, pid=product.id: navigate(f"/product/{pid}"),
-                                tooltip="Open product"),
+                                tooltip=t("action.view_all")),
                 ])
             )
 
         table_holder.controls = [
             styled_table(
-                ["Product", "SKU", "Category", "Stock", "Price", "Status", ""],
-                rows, empty_message="No products match these filters.",
+                ["Product", "SKU", t("field.category"), "Stock", "Price", t("field.status"), ""],
+                rows, empty_message=t("empty.no_filters"),
             )
         ]
         count_text.value = f"{len(rows)} of {len(products)} products"
@@ -144,15 +145,15 @@ def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
     categories = app.product_service.list_categories()
     category_options = [("__all__", "All categories")] + [(c, c) for c in categories]
 
-    search = search_field("Search products\u2026", width=280,
+    search = search_field(t("field.search_products"), width=280,
                           on_change=lambda e: (state.update(search=e.control.value), render_table()))
-    category = dropdown_field("Category", category_options, value="__all__", width=210,
+    category = dropdown_field(t("field.category"), category_options, value="__all__", width=210,
                               dense=True,
                               on_select=lambda e: (
                                   state.update(category=None if e.control.value == "__all__" else e.control.value),
                                   render_table(),
                               ))
-    status = dropdown_field("Status", _STATUS_FILTERS, value="all", width=190, dense=True,
+    status = dropdown_field(t("field.status"), _STATUS_FILTERS, value="all", width=190, dense=True,
                             on_select=lambda e: (state.update(status=e.control.value or "all"), render_table()))
 
     render_table(update=False)
@@ -180,12 +181,12 @@ def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
     ])
 
     header = page_header(
-        "Inventory",
+        t("nav.inventory"),
         "Manage your products and stock levels \u2014 add, edit or remove products and track expiry.",
         actions=[
-            ft.OutlinedButton(content="Import / Export", icon=ft.Icons.SWAP_VERT,
+            ft.OutlinedButton(content=t("panel.import_export"), icon=ft.Icons.SWAP_VERT,
                               on_click=lambda e: navigate("/data")),
-            ft.Button(content="Add Product", icon=ft.Icons.ADD,
+            ft.Button(content=t("action.add_product_title"), icon=ft.Icons.ADD,
                       on_click=lambda e: _open_add_product(page, navigate)),
         ],
     )
@@ -200,7 +201,7 @@ def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
         header,
         kpis,
         section(
-            "Product catalogue",
+            t("panel.product_catalogue"),
             ft.Column(spacing=T.GAP_SMALL, controls=[toolbar, table_holder]),
             subtitle=count_text,
         ),
@@ -220,22 +221,22 @@ def _set_filter(status_control, state: dict, render_table, value: str) -> None:
 def _open_add_product(page: ft.Page, navigate: Callable[[str], None]) -> None:
     app = app_context
     fields = {
-        "sku": text_field("SKU *", width=250, autofocus=True),
-        "name": text_field("Product name *", width=250),
-        "category": text_field("Category", value="General", width=250),
-        "unit": text_field("Unit", value="pcs", width=250),
-        "brand": text_field("Brand", width=250),
-        "cost": text_field("Cost price", value="0", width=250),
-        "price": text_field("Selling price", value="0", width=250),
-        "reorder": text_field("Reorder point", value="10", width=250),
-        "safety": text_field("Safety stock", value="5", width=250),
-        "opening": text_field("Opening stock", value="0", width=250),
-        "expiry": text_field("Expiry date (YYYY-MM-DD, optional)", width=250),
+        "sku": text_field(t("field.sku"), width=250, autofocus=True),
+        "name": text_field(t("field.product_name"), width=250),
+        "category": text_field(t("field.category"), value="General", width=250),
+        "unit": text_field(t("field.unit"), value="pcs", width=250),
+        "brand": text_field(t("field.brand"), width=250),
+        "cost": text_field(t("field.cost_price"), value="0", width=250),
+        "price": text_field(t("field.selling_price"), value="0", width=250),
+        "reorder": text_field(t("field.reorder_point"), value="10", width=250),
+        "safety": text_field(t("field.safety_stock"), value="5", width=250),
+        "opening": text_field(t("field.opening_stock"), value="0", width=250),
+        "expiry": text_field(t("field.expiry_date"), width=250),
     }
-    expiry_switch = ft.Switch(label="Track expiry for this product", value=False,
+    expiry_switch = ft.Switch(label=t("field.track_expiry"), value=False,
                               label_text_style=ft.TextStyle(color=T.TEXT_SECONDARY, size=T.FONT_SMALL))
     suppliers = app.supplier_service.list_suppliers()
-    supplier_dd = dropdown_field("Preferred supplier (optional)",
+    supplier_dd = dropdown_field(t("field.preferred_supplier"),
                                  [("__none__", "None")] + [(str(s.id), s.name) for s in suppliers],
                                  value="__none__")
 
@@ -273,7 +274,7 @@ def _open_add_product(page: ft.Page, navigate: Callable[[str], None]) -> None:
 
     dialog = ft.AlertDialog(
         modal=True,
-        title=ft.Text("Add product"),
+        title=ft.Text(t("action.add_product")),
         content=ft.Container(
             width=560,
             content=ft.Column(
@@ -293,8 +294,8 @@ def _open_add_product(page: ft.Page, navigate: Callable[[str], None]) -> None:
             ),
         ),
         actions=[
-            ft.TextButton(content="Cancel", on_click=lambda e: page.pop_dialog()),
-            ft.Button(content="Save product", on_click=save),
+            ft.TextButton(content=t("action.cancel"), on_click=lambda e: page.pop_dialog()),
+            ft.Button(content=t("action.save_product"), on_click=save),
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )

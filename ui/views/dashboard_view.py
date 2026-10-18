@@ -14,6 +14,7 @@ import flet as ft
 
 from app.bootstrap import app_context
 from app.config import Config
+from app.i18n import t
 from app.theme import StockWiseTheme as T
 from domain.money import format_money
 from ui.components.chart import area_chart, chart_legend
@@ -30,14 +31,17 @@ from ui.components.layout import (
 from ui.components.status_chip import status_chip
 from ui.components.table import styled_table, text_cell
 
+# Ledger movement types -> translation keys. Every ``MovementType`` value is
+# covered, so the fallback only ever guards against an unknown future type.
 _MOVEMENT_LABELS = {
-    "opening_stock": "Opening stock",
-    "purchase_receipt": "Receipt",
-    "sale": "Sale",
-    "return": "Return",
-    "waste": "Waste",
-    "adjustment": "Adjustment",
-    "correction": "Correction",
+    "opening_stock": "movement.opening_stock",
+    "purchase_receipt": "movement.purchase_receipt",
+    "sale": "movement.sale",
+    "return": "movement.return",
+    "waste": "movement.waste",
+    "adjustment": "movement.adjustment",
+    "correction": "movement.correction",
+    "transfer": "movement.transfer",
 }
 
 _ALERT_STATUS = {"critical": "critical", "warning": "near_expiry", "info": "info"}
@@ -56,13 +60,14 @@ _MOVEMENT_TONE = {
     "transfer": "STATUS_INFO",
 }
 
+# Stock status -> translation key for the table's status chip.
 _STATUS_LABELS = {
-    "healthy": "In stock",
-    "low": "Low stock",
-    "out_of_stock": "Out of stock",
-    "near_expiry": "Near expiry",
-    "expired": "Expired",
-    "at_risk": "At risk",
+    "healthy": "status.in_stock",
+    "low": "metric.low_stock",
+    "out_of_stock": "status.out_of_stock",
+    "near_expiry": "status.near_expiry",
+    "expired": "status.expired",
+    "at_risk": "status.at_risk",
 }
 
 
@@ -80,8 +85,8 @@ def build_dashboard_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
     today = date.today()
     range_label = f"{(today - timedelta(days=13)).strftime('%d %b')} \u2013 {today.strftime('%d %b, %Y')}"
     header = page_header(
-        "Dashboard",
-        "Overview of your inventory, sales and forecast at a glance.",
+        t("nav.dashboard"),
+        t("dashboard.subtitle"),
         actions=[
             ft.Container(
                 padding=ft.Padding.symmetric(horizontal=12, vertical=8),
@@ -93,28 +98,28 @@ def build_dashboard_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
                     ft.Text(range_label, size=T.FONT_SMALL, color=T.TEXT_SECONDARY),
                 ]),
             ),
-            ft.OutlinedButton(content="Refresh", icon=ft.Icons.REFRESH,
+            ft.OutlinedButton(content=t("action.refresh"), icon=ft.Icons.REFRESH,
                               on_click=lambda e: navigate("/")),
         ],
     )
 
     out_of_stock = stats.out_of_stock_count
     kpis = kpi_strip([
-        KpiMetric("Total Products", str(stats.total_products), icon=ft.Icons.INVENTORY_2_OUTLINED,
-                  accent=T.STATUS_INFO, caption="In the catalogue",
+        KpiMetric(t("metric.total_products"), str(stats.total_products), icon=ft.Icons.INVENTORY_2_OUTLINED,
+                  accent=T.STATUS_INFO, caption=t("cap.in_catalogue"),
                   on_click=lambda e: navigate("/inventory")),
-        KpiMetric("Total Stock Value", format_money(stats.total_stock_value),
-                  icon=ft.Icons.PAYMENTS_OUTLINED, accent=T.STATUS_HEALTHY, caption="At cost",
+        KpiMetric(t("metric.total_stock_value"), format_money(stats.total_stock_value),
+                  icon=ft.Icons.PAYMENTS_OUTLINED, accent=T.STATUS_HEALTHY, caption=t("cap.at_cost"),
                   on_click=lambda e: navigate("/inventory")),
-        KpiMetric("Out of Stock", str(out_of_stock), icon=ft.Icons.REMOVE_SHOPPING_CART_OUTLINED,
+        KpiMetric(t("metric.out_of_stock"), str(out_of_stock), icon=ft.Icons.REMOVE_SHOPPING_CART_OUTLINED,
                   accent=T.STATUS_CRITICAL,
-                  caption=(f"{stats.low_stock_count} low stock" if stats.low_stock_count
-                           else "Requires attention"),
+                  caption=(f"{stats.low_stock_count} {t('metric.low_stock').lower()}"
+                           if stats.low_stock_count else t("cap.requires_attention")),
                   delta_kind="down" if out_of_stock else "muted",
                   on_click=lambda e: navigate("/inventory")),
-        KpiMetric("Expiry Risk", str(stats.near_expiry_count),
+        KpiMetric(t("metric.expiry_risk"), str(stats.near_expiry_count),
                   icon=ft.Icons.EVENT_BUSY_OUTLINED, accent=T.STATUS_WARNING,
-                  caption=f"Within {Config.NEAR_EXPIRY_WINDOW_DAYS} days",
+                  caption=t("cap.within_days", days=Config.NEAR_EXPIRY_WINDOW_DAYS),
                   delta_kind="warn" if stats.near_expiry_count else "muted",
                   on_click=lambda e: navigate("/expiry")),
     ])
@@ -159,13 +164,13 @@ def _alerts_panel(alerts, navigate: Callable[[str], None]) -> ft.Control:
     content = (
         ft.Column(spacing=0, controls=rows)
         if rows
-        else empty_state("Nothing needs attention",
-                         "No low-stock, expiring or rising-demand items right now.",
+        else empty_state(t("empty.no_alerts"),
+                         t("empty.no_alerts_body"),
                          icon=ft.Icons.CHECK_CIRCLE_OUTLINE)
     )
     return section(
-        "Recent Alerts", content, subtitle="Low stock, expiry risk and demand spikes",
-        actions=([ft.TextButton(content="View all", on_click=lambda e: navigate("/expiry"))] if rows else None),
+        t("panel.recent_alerts"), content, subtitle=t("panel.alerts_subtitle"),
+        actions=([ft.TextButton(content=t("action.view_all"), on_click=lambda e: navigate("/expiry"))] if rows else None),
     )
 
 
@@ -187,7 +192,7 @@ def _activity_panel(stats) -> ft.Control:
                     size=30,
                 ),
                 title=product.name,
-                subtitle=f"{_MOVEMENT_LABELS.get(kind, kind)}"
+                subtitle=f"{t(_MOVEMENT_LABELS.get(kind, kind))}"
                          f" \u00b7 {movement.occurred_at}",
                 trailing=ft.Text(f"{delta:+g}", size=T.FONT_BODY,
                                  color=tone, weight=ft.FontWeight.W_600),
@@ -198,10 +203,10 @@ def _activity_panel(stats) -> ft.Control:
     content = (
         ft.Column(spacing=0, controls=rows)
         if rows
-        else empty_state("No stock movements yet", "Receipts, sales and adjustments appear here.",
+        else empty_state(t("empty.no_movements"), t("empty.no_movements_body"),
                          icon=ft.Icons.SWAP_VERT)
     )
-    return section("Recent Stock Activity", content, subtitle="Latest ledger entries")
+    return section(t("panel.recent_activity"), content, subtitle=t("panel.activity_subtitle"))
 
 
 def _sales_vs_forecast_panel(forecasts) -> ft.Control:
@@ -231,14 +236,14 @@ def _sales_vs_forecast_panel(forecasts) -> ft.Control:
 
     if not fc_values:
         return section(
-            "Sales vs Forecast",
-            empty_state("No forecasts yet",
-                        "Generate a forecast to see predicted demand against recent sales.",
+            t("panel.sales_vs_forecast"),
+            empty_state(t("empty.no_forecasts"),
+                        t("empty.no_forecasts_chart"),
                         icon=ft.Icons.INSIGHTS_OUTLINED),
-            subtitle="Units per day \u00b7 last 14 days and next 7",
+            subtitle=t("panel.chart_units_subtitle"),
         )
 
-    legend_items = [("Actual sales", T.PRIMARY), ("Forecast", T.ACCENT)]
+    legend_items = [(t("chart.actual_sales"), T.PRIMARY), (t("chart.forecast"), T.ACCENT)]
 
     def _render(*, with_band: bool) -> ft.Control:
         return ft.Column(spacing=T.GAP_SMALL, controls=[
@@ -254,11 +259,11 @@ def _sales_vs_forecast_panel(forecasts) -> ft.Control:
     content = ft.Column(spacing=T.GAP_SMALL, controls=[
         chart_legend(legend_items),
         _render(with_band=bool(fc_upper)),
-        ft.Text("The shaded band is the forecast's likely range (widening with the horizon)."
-                if fc_upper else "Generate a model forecast to see a confidence band around predictions.",
+        ft.Text(t("chart.band_note")
+                if fc_upper else t("chart.band_hint"),
                 size=T.FONT_TINY, color=T.TEXT_TERTIARY),
     ])
-    return section("Sales vs Forecast", content, subtitle="Units per day \u00b7 last 14 days and next 7")
+    return section(t("panel.sales_vs_forecast"), content, subtitle=t("panel.chart_units_subtitle"))
 
 
 def _top_products_panel(products, snapshots, forecasts) -> ft.Control:
@@ -283,11 +288,11 @@ def _top_products_panel(products, snapshots, forecasts) -> ft.Control:
         ])
         for name, total, status in ranked[:6]
     ]
-    content = styled_table(["Product", "Forecast 7d", "Stock status"], rows,
-                           empty_message="Generate forecasts to populate this list.")
+    content = styled_table([t("col.product"), t("col.forecast_7d"), t("col.stock_status")], rows,
+                           empty_message=t("table.populate_forecasts"))
     return section(
-        "Top Products by Predicted Demand", content, subtitle="Next 7 days",
-        actions=[ft.TextButton(content="View all", on_click=lambda e: navigate("/forecasting"))]
+        t("panel.top_demand"), content, subtitle=t("panel.top_products_sub"),
+        actions=[ft.TextButton(content=t("action.view_all"), on_click=lambda e: navigate("/forecasting"))]
         if rows else None,
     )
 
@@ -318,19 +323,19 @@ def _quick_actions(navigate: Callable[[str], None]) -> ft.Control:
 
     grid = ft.Column(spacing=T.GAP_SMALL, controls=[
         ft.Row(spacing=T.GAP_SMALL, controls=[
-            tile(ft.Icons.ADD_CIRCLE_OUTLINE, "Add Product", "New product to inventory",
+            tile(ft.Icons.ADD_CIRCLE_OUTLINE, t("quick.add_product"), t("quick.add_product_sub"),
                  "/inventory", T.STATUS_INFO),
-            tile(ft.Icons.ADD_SHOPPING_CART_OUTLINED, "Record Sale", "Update stock & sales",
+            tile(ft.Icons.ADD_SHOPPING_CART_OUTLINED, t("quick.record_sale"), t("quick.record_sale_sub"),
                  "/sales", T.ACCENT),
         ]),
         ft.Row(spacing=T.GAP_SMALL, controls=[
-            tile(ft.Icons.AUTO_GRAPH_OUTLINED, "Generate Forecast", "Predict demand for the week",
+            tile(ft.Icons.AUTO_GRAPH_OUTLINED, t("quick.generate_forecast"), t("quick.generate_forecast_sub"),
                  "/forecasting", T.STATUS_HEALTHY),
-            tile(ft.Icons.SHOPPING_CART_CHECKOUT_OUTLINED, "Reorder Suggestions",
-                 "Based on demand & stock", "/reorder", T.STATUS_WARNING),
+            tile(ft.Icons.SHOPPING_CART_CHECKOUT_OUTLINED, t("quick.reorder"),
+                 t("quick.reorder_sub"), "/reorder", T.STATUS_WARNING),
         ]),
     ])
-    return section("Quick Actions", grid, subtitle="Jump to the tasks you do most")
+    return section(t("panel.quick_actions"), grid, subtitle=t("quick.jump"))
 
 
 def _day_label(iso: str) -> str:

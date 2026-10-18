@@ -15,6 +15,7 @@ import flet as ft
 from app.bootstrap import app_context
 from app.config import Config
 from app.theme import StockWiseTheme as T
+from app.i18n import t
 from ui.components.feedback import banner, notify, notify_error
 from ui.components.forms import text_field
 from ui.components.layout import flow_row, page_header, scroll_column, section
@@ -28,8 +29,8 @@ def build_import_export_view(page: ft.Page, navigate: Callable[[str], None]) -> 
     app = app_context
     app.import_export_service.write_templates()  # ensure templates exist on disk
 
-    products_path = text_field("Products CSV file", value=str(IMPORT_DIR / "products.csv"), width=460)
-    sales_path = text_field("Sales CSV file", value=str(IMPORT_DIR / "sales.csv"), width=460)
+    products_path = text_field(t("action.import_products"), value=str(IMPORT_DIR / "products.csv"), width=460)
+    sales_path = text_field(t("action.import_sales"), value=str(IMPORT_DIR / "sales.csv"), width=460)
     products_preview = ft.Column(spacing=T.GAP_SMALL)
     sales_preview = ft.Column(spacing=T.GAP_SMALL)
 
@@ -45,7 +46,7 @@ def build_import_export_view(page: ft.Page, navigate: Callable[[str], None]) -> 
 
     def render_preview(holder: ft.Column, preview) -> None:
         if preview.total_rows == 0 and preview.error_count == 0:
-            holder.controls = [banner("The file has no data rows.", "warning")]
+            holder.controls = [banner(t("empty.no_rows"), "warning")]
             return
         kind = "success" if not preview.has_errors else "warning"
         holder.controls = [
@@ -96,24 +97,24 @@ def build_import_export_view(page: ft.Page, navigate: Callable[[str], None]) -> 
             notify_error(page, exc)
 
     products_panel = section(
-        "Import products",
+        t("action.import_products"),
         ft.Column(spacing=T.GAP_SMALL, controls=[
             flow_row([
                 (products_path, {"xs": 12, "sm": 8, "lg": 7}),
                 (
-                    ft.OutlinedButton(content="Download template", icon=ft.Icons.DOWNLOAD,
+                    ft.OutlinedButton(content=t("action.download_template"), icon=ft.Icons.DOWNLOAD,
                                       on_click=lambda e: download_template("products", products_path.value)),
                     {"xs": 12, "sm": 4, "lg": 3},
                 ),
             ]),
             flow_row([
                 (
-                    ft.OutlinedButton(content="Validate", icon=ft.Icons.FACT_CHECK_OUTLINED,
+                    ft.OutlinedButton(content=t("action.validate"), icon=ft.Icons.FACT_CHECK_OUTLINED,
                                       on_click=preview_products),
                     {"xs": 12, "sm": 6, "lg": 3},
                 ),
                 (
-                    ft.Button(content="Import valid rows", icon=ft.Icons.UPLOAD,
+                    ft.Button(content=t("action.import_rows"), icon=ft.Icons.UPLOAD,
                               on_click=import_products),
                     {"xs": 12, "sm": 6, "lg": 3},
                 ),
@@ -124,24 +125,24 @@ def build_import_export_view(page: ft.Page, navigate: Callable[[str], None]) -> 
     )
 
     sales_panel = section(
-        "Import sales",
+        t("action.import_sales"),
         ft.Column(spacing=T.GAP_SMALL, controls=[
             flow_row([
                 (sales_path, {"xs": 12, "sm": 8, "lg": 7}),
                 (
-                    ft.OutlinedButton(content="Download template", icon=ft.Icons.DOWNLOAD,
+                    ft.OutlinedButton(content=t("action.download_template"), icon=ft.Icons.DOWNLOAD,
                                       on_click=lambda e: download_template("sales", sales_path.value)),
                     {"xs": 12, "sm": 4, "lg": 3},
                 ),
             ]),
             flow_row([
                 (
-                    ft.OutlinedButton(content="Validate", icon=ft.Icons.FACT_CHECK_OUTLINED,
+                    ft.OutlinedButton(content=t("action.validate"), icon=ft.Icons.FACT_CHECK_OUTLINED,
                                       on_click=preview_sales),
                     {"xs": 12, "sm": 6, "lg": 3},
                 ),
                 (
-                    ft.Button(content="Import valid rows", icon=ft.Icons.UPLOAD,
+                    ft.Button(content=t("action.import_rows"), icon=ft.Icons.UPLOAD,
                               on_click=import_sales),
                     {"xs": 12, "sm": 6, "lg": 3},
                 ),
@@ -152,15 +153,15 @@ def build_import_export_view(page: ft.Page, navigate: Callable[[str], None]) -> 
     )
 
     export_panel = section(
-        "Export data",
+        t("action.export_data"),
         flow_row([
             (
-                ft.OutlinedButton(content="Export products CSV", icon=ft.Icons.TABLE_VIEW,
+                ft.OutlinedButton(content=t("action.export_products_csv"), icon=ft.Icons.TABLE_VIEW,
                                   on_click=export_products),
                 {"xs": 12, "sm": 6, "lg": 3},
             ),
             (
-                ft.OutlinedButton(content="Export sales CSV", icon=ft.Icons.RECEIPT_LONG,
+                ft.OutlinedButton(content=t("action.export_sales_csv"), icon=ft.Icons.RECEIPT_LONG,
                                   on_click=export_sales),
                 {"xs": 12, "sm": 6, "lg": 3},
             ),

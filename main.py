@@ -17,6 +17,7 @@ import flet as ft
 
 from app.bootstrap import app_context
 from app.config import Config
+from app.i18n import StockWiseLang as L, t
 from app.navigation import build_sidebar, shop_name
 from app.theme import StockWiseTheme as T
 from ui.components.forms import search_field
@@ -39,6 +40,7 @@ def main(page: ft.Page) -> None:
         return
 
     _restore_theme_preference(page)
+    _restore_language_preference(page)
 
     # --- Configure window / page ---
     # Bundled fonts (Mukta: Latin + Devanagari). Loaded from the assets dir so the
@@ -78,6 +80,34 @@ def main(page: ft.Page) -> None:
         page.theme_mode = ft.ThemeMode.DARK if T.is_dark() else ft.ThemeMode.LIGHT
         page.bgcolor = T.PAGE_BG
         render()
+
+    def toggle_language(mode: str) -> None:
+        """Switch the UI language and re-render every screen.
+
+        Frontend-only: no service, repository or schema change. Language is a
+        reading preference, so it lives in client_storage beside the theme rather
+        than in the settings table that drives forecasting.
+        """
+        L.apply(mode)
+        _persist_language_preference(page, L.mode)
+        render()
+
+    def _lang_pill(label: str, code: str) -> ft.Control:
+        """One half of the EN / हिन्दी switch; the active half is filled."""
+        active = L.mode == code
+        return ft.Container(
+            padding=ft.Padding.symmetric(horizontal=10, vertical=6),
+            border_radius=T.RADIUS_SMALL - 2,
+            bgcolor=T.PRIMARY if active else None,
+            tooltip=t("topbar.toggle_language"),
+            on_click=lambda e, c=code: toggle_language(c),
+            ink=True,
+            content=ft.Text(
+                label, size=T.FONT_TINY,
+                weight=ft.FontWeight.W_600 if active else ft.FontWeight.W_400,
+                color=T.TEXT_ON_PRIMARY if active else T.TEXT_SECONDARY,
+            ),
+        )
 
     def set_panel(panel: str | None) -> None:
         state["panel"] = panel
@@ -127,7 +157,7 @@ def main(page: ft.Page) -> None:
         return ft.Column(spacing=2, controls=[
             ft.Container(
                 padding=ft.Padding.only(left=14, right=14, top=10, bottom=4),
-                content=ft.Text("Products", size=T.FONT_TINY, weight=ft.FontWeight.W_600,
+                content=ft.Text(t("col.product"), size=T.FONT_TINY, weight=ft.FontWeight.W_600,
                                 color=T.TEXT_TERTIARY),
             ),
             ft.Column(spacing=0, controls=rows),
@@ -142,7 +172,7 @@ def main(page: ft.Page) -> None:
         if not alerts:
             return ft.Container(
                 padding=ft.Padding.symmetric(horizontal=14, vertical=16),
-                content=ft.Text("Nothing needs attention right now.", size=T.FONT_SMALL,
+                content=ft.Text(t("empty.no_alerts"), size=T.FONT_SMALL,
                                 color=T.TEXT_TERTIARY),
             )
         rows = [
@@ -216,7 +246,7 @@ def main(page: ft.Page) -> None:
         )
 
         search = search_field(
-            "Search products, categories\u2026",
+            t("topbar.search"),
             width=420,
             on_change=on_search,
         )
@@ -229,15 +259,35 @@ def main(page: ft.Page) -> None:
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
                     ft.IconButton(
-                        ft.Icons.MENU, icon_size=20, icon_color=T.TEXT_SECONDARY, tooltip="Toggle sidebar",
+                        ft.Icons.MENU, icon_size=20, icon_color=T.TEXT_SECONDARY,
+                        tooltip=t("topbar.toggle_sidebar"),
                         on_click=lambda e: toggle_sidebar(),
                     ),
                     ft.Container(width=4),
                     search,
                     ft.Container(expand=True),
+                    # Language switch, immediately left of the theme switch: the two
+                    # are the only "how do I read this app" controls, so they sit
+                    # together. A segmented control, not an icon — EN and हिन्दी are
+                    # both short enough to show, and a globe icon would only say
+                    # *that* a language exists, not which one is active.
+                    ft.Container(
+                        padding=2,
+                        border_radius=T.RADIUS_SMALL,
+                        bgcolor=T.BG_INPUT,
+                        border=ft.Border.all(1, T.BORDER),
+                        content=ft.Row(
+                            spacing=0,
+                            controls=[
+                                _lang_pill("EN", "en"),
+                                _lang_pill("हिन्दी", "hi"),
+                            ],
+                        ),
+                    ),
+                    ft.Container(width=8),
                     icon_button(
                         ft.Icons.DARK_MODE_OUTLINED if T.is_dark() else ft.Icons.LIGHT_MODE_OUTLINED,
-                        "Switch theme",
+                        t("topbar.toggle_theme"),
                         toggle_theme,
                     ),
                     ft.Container(
@@ -271,7 +321,7 @@ def main(page: ft.Page) -> None:
                                         ft.Text(shop_name(), size=T.FONT_SMALL,
                                                 weight=ft.FontWeight.W_600,
                                                 color=T.TEXT_PRIMARY, no_wrap=True),
-                                        ft.Text("Store owner", size=T.FONT_TINY,
+                                        ft.Text(t("topbar.store_owner"), size=T.FONT_TINY,
                                                 color=T.TEXT_TERTIARY),
                                     ],
                                 ),
@@ -297,17 +347,17 @@ def main(page: ft.Page) -> None:
                     content=ft.Column(spacing=T.GAP_SMALL, controls=[
                         ft.Row(spacing=8, controls=[
                             ft.Icon(ft.Icons.ERROR_OUTLINE, color=T.STATUS_CRITICAL, size=20),
-                            ft.Text("This screen could not be loaded", size=T.FONT_SUBTITLE,
+                            ft.Text(t("topbar.error_title"), size=T.FONT_SUBTITLE,
                                     weight=ft.FontWeight.W_600, color=T.TEXT_PRIMARY),
                         ]),
                         ft.Text(f"Route '{route}' failed: {exc}", size=T.FONT_SMALL,
                                 color=T.TEXT_SECONDARY, selectable=True),
-                        ft.Text("Your data is safe. Try another screen, or press Retry.",
+                        ft.Text(t("topbar.error_body"),
                                 size=T.FONT_SMALL, color=T.TEXT_TERTIARY),
                         ft.Row(spacing=T.GAP_SMALL, controls=[
-                            ft.Button(content="Go to Dashboard", icon=ft.Icons.DASHBOARD_OUTLINED,
+                            ft.Button(content=t("topbar.go_dashboard"), icon=ft.Icons.DASHBOARD_OUTLINED,
                                       on_click=lambda e: navigate("/")),
-                            ft.OutlinedButton(content="Retry", icon=ft.Icons.REFRESH,
+                            ft.OutlinedButton(content=t("topbar.retry"), icon=ft.Icons.REFRESH,
                                               on_click=lambda e: render()),
                         ]),
                     ]),
@@ -387,6 +437,23 @@ def _persist_theme_preference(page: ft.Page, mode: str) -> None:
         page.client_storage.set("stockwise_theme", mode)
     except Exception:  # pragma: no cover - storage unavailable
         logger.debug("Could not persist theme preference")
+
+
+def _restore_language_preference(page: ft.Page) -> None:
+    """Best-effort restore of the saved language (frontend-only, never fatal)."""
+    try:
+        saved = page.client_storage.get("stockwise_lang")
+        if saved in ("en", "hi"):
+            L.apply(saved)
+    except Exception:  # pragma: no cover - storage unavailable
+        logger.debug("Language preference unavailable")
+
+
+def _persist_language_preference(page: ft.Page, mode: str) -> None:
+    try:
+        page.client_storage.set("stockwise_lang", mode)
+    except Exception:  # pragma: no cover - storage unavailable
+        logger.debug("Could not persist language preference")
 
 
 if __name__ == "__main__":

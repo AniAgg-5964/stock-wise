@@ -18,6 +18,7 @@ import flet as ft
 from app.bootstrap import app_context
 from app.config import Config
 from app.theme import StockWiseTheme as T
+from app.i18n import t
 from domain.exceptions import StockWiseError
 from domain.money import format_money
 from ui.components.empty_state import empty_state
@@ -123,7 +124,7 @@ def build_expiry_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Cont
                           color=T.TEXT_SECONDARY),
                 chip_cell(label, status),
                 action_cell(lambda e, b=batch, p=product: _open_waste(page, navigate, b, p),
-                            icon=ft.Icons.DELETE_OUTLINE, tooltip="Record waste"),
+                            icon=ft.Icons.DELETE_OUTLINE, tooltip=t("action.record_waste")),
             ]))
         return rows
 
@@ -132,11 +133,11 @@ def build_expiry_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Cont
         styled_table(["Product", "Batch", "Expiry", "Days left", "Remaining", "At risk (est.)",
                       "Value", "Status", ""],
                      build_rows(expiring, expired_rows=False),
-                     empty_message="Nothing expiring in this window."),
+                     empty_message=t("empty.no_expiring_body")),
         subtitle="Consumption follows FEFO \u2014 earliest expiry is sold first",
     )
     expired_panel = section(
-        "Already expired",
+        t("metric.already_expired"),
         styled_table(["Product", "Batch", "Expiry", "Days over", "Remaining", "At risk (est.)",
                       "Value", "Status", ""],
                      build_rows(expired, expired_rows=True),
@@ -159,7 +160,7 @@ def build_expiry_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Cont
         KpiMetric("Estimated value at risk", format_money(value_at_risk),
                   icon=ft.Icons.CURRENCY_RUPEE, accent=T.STATUS_CRITICAL,
                   caption="likely unrealised"),
-        KpiMetric("Already expired", f"{units_expired:g} units",
+        KpiMetric(t("metric.already_expired"), f"{units_expired:g} units",
                   icon=ft.Icons.DELETE_SWEEP_OUTLINED,
                   accent=T.STATUS_CRITICAL if units_expired else T.STATUS_HEALTHY,
                   caption="not sellable",
@@ -167,9 +168,9 @@ def build_expiry_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Cont
     ])
 
     header = page_header(
-        "Expiry Management",
+        t("nav.expiry"),
         f"{len(expiring)} batches expiring \u00b7 {len(expired)} expired \u00b7 {units_expiring + units_expired:g} units affected",
-        actions=[ft.OutlinedButton(content="Refresh", icon=ft.Icons.REFRESH,
+        actions=[ft.OutlinedButton(content=t("action.refresh"), icon=ft.Icons.REFRESH,
                                    on_click=lambda e: navigate("/expiry"))],
     )
 
@@ -177,7 +178,7 @@ def build_expiry_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Cont
         return scroll_column([
             header,
             kpis,
-            empty_state("Nothing expiring", "No batches are near or past their expiry date.",
+            empty_state(t("empty.no_expiring"), "No batches are near or past their expiry date.",
                         icon=ft.Icons.EVENT_AVAILABLE_OUTLINED),
         ])
 
@@ -186,8 +187,8 @@ def build_expiry_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Cont
 
 def _open_waste(page: ft.Page, navigate: Callable[[str], None], batch, product) -> None:
     app = app_context
-    quantity = text_field("Quantity to write off *", value=f"{batch.quantity_remaining:g}")
-    reason = text_field("Reason *", value="Expired")
+    quantity = text_field(t("field.quantity_waste"), value=f"{batch.quantity_remaining:g}")
+    reason = text_field(t("field.reason_waste"), value="Expired")
     product_name = product.name if product else f"Product {batch.product_id}"
 
     def save(e) -> None:
@@ -197,7 +198,7 @@ def _open_waste(page: ft.Page, navigate: Callable[[str], None], batch, product) 
                 reason=(reason.value or "").strip(), batch_id=batch.id,
             )
             page.pop_dialog()
-            notify(page, "Waste recorded", "success")
+            notify(page, t("toast.waste_recorded"), "success")
             navigate("/expiry")
         except (StockWiseError, ValueError) as exc:
             notify_error(page, exc)
@@ -208,8 +209,8 @@ def _open_waste(page: ft.Page, navigate: Callable[[str], None], batch, product) 
         content=ft.Container(width=380, content=ft.Column(tight=True, spacing=T.GAP_SMALL,
                                                          controls=[quantity, reason])),
         actions=[
-            ft.TextButton(content="Cancel", on_click=lambda e: page.pop_dialog()),
-            ft.Button(content="Record waste", on_click=save),
+            ft.TextButton(content=t("action.cancel"), on_click=lambda e: page.pop_dialog()),
+            ft.Button(content=t("action.record_waste"), on_click=save),
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )

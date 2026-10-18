@@ -26,6 +26,7 @@ import flet as ft
 
 from app.bootstrap import app_context
 from app.theme import StockWiseTheme as T
+from app.i18n import t
 from application.services.supplier_research_service import FIELD_LABELS
 from domain.exceptions import StockWiseError
 from ui.components.feedback import banner, notify, notify_error
@@ -167,7 +168,7 @@ def build_research_panel(
             parts += [
                 ft.Divider(height=1, color=T.BORDER_SUBTLE),
                 ft.Row(spacing=10, controls=[
-                    ft.Text("Candidate sources", size=T.FONT_SMALL, color=T.TEXT_SECONDARY,
+                    ft.Text(t("panel.candidate_sources"), size=T.FONT_SMALL, color=T.TEXT_SECONDARY,
                             weight=ft.FontWeight.W_600, expand=True),
                     ft.TextButton(
                         content=f"Research {unblocked} that may work",
@@ -188,14 +189,14 @@ def build_research_panel(
                             text_cell(candidate.snippet[:140], color=T.TEXT_TERTIARY),
                             action_cell(lambda e, c=candidate: _research(c),
                                         icon=ft.Icons.TRAVEL_EXPLORE,
-                                        tooltip="Fetch this page and extract facts"),
+                                        tooltip=t("action.fetch_page")),
                             action_cell(lambda e, c=candidate: _open_add_supplier(c),
                                         icon=ft.Icons.PERSON_ADD_ALT,
-                                        tooltip="Save this as a supplier"),
+                                        tooltip=t("action.save_as_supplier")),
                         ])
                         for candidate in candidates
                     ],
-                    empty_message="No candidate sources yet.",
+                    empty_message=t("empty.no_candidates"),
                 ),
                 ft.Text(
                     "A greyed note under a site means it usually refuses automated "
@@ -222,13 +223,13 @@ def build_research_panel(
                                       "healthy" if obs.verified_by_user else "info"),
                             action_cell(lambda e, o=obs: _apply_observation(o),
                                         icon=ft.Icons.CHECK_CIRCLE_OUTLINE,
-                                        tooltip="Apply to a supplier"),
+                                        tooltip=t("action.apply")),
                             action_cell(lambda e, o=obs: _reject_observation(o),
-                                        icon=ft.Icons.CLOSE, tooltip="Discard this candidate"),
+                                        icon=ft.Icons.CLOSE, tooltip=t("toast.candidate_discarded")),
                         ])
                         for obs in observations
                     ],
-                    empty_message="No candidate facts yet \u2014 research a source above.",
+                    empty_message=t("empty.no_candidate_facts"),
                 ),
                 ft.Text(
                     "Confidence reflects how explicitly the page stated the value, "
@@ -244,7 +245,7 @@ def build_research_panel(
     def _run(func, *args, **kwargs) -> None:
         """Run a blocking service call off the UI thread, then re-render."""
         if state["busy"]:
-            notify(page, "Still working on the previous request", "warning")
+            notify(page, t("empty.busy"), "warning")
             return
         state["busy"] = True
         _say("Working\u2026")
@@ -302,12 +303,12 @@ def build_research_panel(
     def _open_add_supplier(candidate) -> None:
         """Turn a search result into a real supplier record."""
         draft = research.draft_supplier(candidate, query=state["last_query"])
-        name_field = text_field("Supplier name", value=draft.name, expand=True)
-        website_field = text_field("Website", value=draft.website_url, expand=True)
-        notes_field = text_field("Notes", value=draft.notes, multiline=True, expand=True)
+        name_field = text_field(t("field.supplier_name"), value=draft.name, expand=True)
+        website_field = text_field(t("field.website"), value=draft.website_url, expand=True)
+        notes_field = text_field(t("field.notes"), value=draft.notes, multiline=True, expand=True)
 
         context: list[ft.Control] = [
-            ft.Text("Found on the page:", size=T.FONT_TINY, color=T.TEXT_TERTIARY),
+            ft.Text(t("note.found_on_page"), size=T.FONT_TINY, color=T.TEXT_TERTIARY),
             ft.Text(candidate.title or candidate.url, size=T.FONT_SMALL, color=T.TEXT_SECONDARY),
         ]
         if candidate.snippet:
@@ -315,7 +316,7 @@ def build_research_panel(
                 ft.Text(candidate.snippet[:220], size=T.FONT_TINY, color=T.TEXT_TERTIARY)
             )
         context.append(ft.Text(
-            "The name is a guess from the website — change it if it is wrong.",
+            t("note.name_is_guess"),
             size=T.FONT_TINY, color=T.TEXT_TERTIARY,
         ))
 
@@ -346,7 +347,7 @@ def build_research_panel(
 
         page.show_dialog(ft.AlertDialog(
             modal=True,
-            title=ft.Text("Save this source as a supplier"),
+            title=ft.Text(t("action.save_source_supplier")),
             content=ft.Container(width=520, content=ft.Column(tight=True, spacing=T.GAP_SMALL, controls=[
                 *notices,
                 *context,
@@ -356,9 +357,9 @@ def build_research_panel(
                 notes_field,
             ])),
             actions=[
-                ft.TextButton(content="Cancel", on_click=lambda e: page.pop_dialog()),
+                ft.TextButton(content=t("action.cancel"), on_click=lambda e: page.pop_dialog()),
                 ft.Button(
-                    content="Add anyway" if draft.already_saved else "Add supplier",
+                    content=t("action.add_anyway") if draft.already_saved else "Add supplier",
                     on_click=save,
                 ),
             ],
@@ -368,7 +369,7 @@ def build_research_panel(
     def _apply_observation(obs) -> None:
         options = _supplier_options()
         if not options:
-            notify(page, "Add a supplier first, then apply a fact to it", "warning")
+            notify(page, t("empty.need_supplier"), "warning")
             return
 
         # Prefer the supplier this fact actually came from, when we know it.
@@ -376,7 +377,7 @@ def build_research_panel(
         if obs.supplier_id and all(str(obs.supplier_id) != key for key, _ in options):
             default = options[0][0]
 
-        supplier_dd = dropdown_field("Apply to supplier", options, value=default, width=360)
+        supplier_dd = dropdown_field(t("action.apply"), options, value=default, width=360)
 
         def confirm(e) -> None:
             page.pop_dialog()
@@ -400,8 +401,8 @@ def build_research_panel(
                 ),
             ])),
             actions=[
-                ft.TextButton(content="Cancel", on_click=lambda e: page.pop_dialog()),
-                ft.Button(content="Apply", on_click=confirm),
+                ft.TextButton(content=t("action.cancel"), on_click=lambda e: page.pop_dialog()),
+                ft.Button(content=t("action.apply"), on_click=confirm),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         ))
@@ -409,7 +410,7 @@ def build_research_panel(
     def _reject_observation(obs) -> None:
         try:
             research.reject(obs.id)
-            notify(page, "Candidate discarded", "success")
+            notify(page, t("toast.candidate_discarded"), "success")
             _render()
         except StockWiseError as exc:
             notify_error(page, exc)
@@ -421,16 +422,16 @@ def build_research_panel(
 
     # ----------------------------------------------------------------- controls
     product_dd = dropdown_field(
-        "Product to research",
+        t("field.research_product"),
         [(str(p.id), p.name) for p in products] or [(NO_PRODUCT, "No products yet")],
         value=str(products[0].id) if products else NO_PRODUCT,
         on_select=lambda e: _render(),
     )
-    query_field = text_field("Or search for\u2026", hint="e.g. bulk rice supplier", width=320)
-    find_button = ft.Button(content="Find suppliers", icon=ft.Icons.SEARCH, on_click=_do_search)
+    query_field = text_field(t("field.search_supplier"), hint=t("hint.bulk_rice"), width=320)
+    find_button = ft.Button(content=t("action.find_suppliers"), icon=ft.Icons.SEARCH, on_click=_do_search)
 
     toggle = ft.Switch(
-        label="Enable live web research",
+        label=t("panel.live_research"),
         value=status.enabled,
         label_text_style=ft.TextStyle(color=T.TEXT_SECONDARY, size=T.FONT_SMALL),
         on_change=_toggle,
@@ -439,7 +440,7 @@ def build_research_panel(
     _render()
 
     return section(
-        "Live supplier research",
+        t("panel.live_research"),
         ft.Column(spacing=T.GAP_SMALL, controls=[toggle, body_holder]),
         subtitle="TinyFish Search + Fetch (free tier) \u00b7 facts stay advisory until you apply them",
     )

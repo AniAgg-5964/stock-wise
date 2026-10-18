@@ -13,6 +13,7 @@ import flet as ft
 
 from app.bootstrap import app_context
 from app.theme import StockWiseTheme as T
+from app.i18n import t
 from domain.entities import ProductSupplier, Supplier
 from domain.exceptions import StockWiseError
 from ui.components.empty_state import empty_state
@@ -29,9 +30,9 @@ def build_suppliers_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
     products = list(app.product_service.list_products(active_only=True))
 
     header = page_header(
-        "Supplier Research",
+        t("nav.suppliers"),
         "Directory of suppliers and how products are sourced",
-        actions=[ft.Button(content="Add supplier", icon=ft.Icons.ADD,
+        actions=[ft.Button(content=t("action.add_supplier"), icon=ft.Icons.ADD,
                            on_click=lambda e: _open_add_supplier(page, navigate))],
     )
 
@@ -41,16 +42,16 @@ def build_suppliers_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
             text_cell(s.contact or "\u2014", color=T.TEXT_SECONDARY),
             text_cell(s.phone or "\u2014", color=T.TEXT_SECONDARY),
             text_cell(s.email or "\u2014", color=T.TEXT_SECONDARY),
-            chip_cell("Active", "healthy") if s.active else chip_cell("Archived", "neutral"),
+            chip_cell(t("field.active"), "healthy") if s.active else chip_cell("Archived", "neutral"),
             action_cell(lambda e, sid=s.id: _open_edit_supplier(page, navigate, sid), icon=ft.Icons.EDIT_OUTLINED,
-                        tooltip="Edit supplier"),
+                        tooltip=t("action.edit_supplier")),
         ])
         for s in suppliers
     ]
     supplier_panel = section(
-        "Supplier directory",
-        styled_table(["Name", "Contact", "Phone", "Email", "Status", ""], supplier_rows,
-                     empty_message="No suppliers yet. Add your first supplier."),
+        t("panel.supplier_directory"),
+        styled_table(["Name", "Contact", t("field.phone"), t("field.email"), "Status", ""], supplier_rows,
+                     empty_message=t("empty.no_suppliers")),
     )
 
     # --- Sourcing map ---
@@ -77,10 +78,10 @@ def build_suppliers_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
             chip_cell("Preferred", "healthy") if link.is_preferred else chip_cell("Backup", "neutral"),
         ]))
     sourcing_panel = section(
-        "Product sourcing",
-        styled_table(["Product", "Supplier", "Lead time", "MOQ", "Pack", "Role"], sourcing_rows,
-                     empty_message="Add products to map their suppliers."),
-        subtitle="Used by reorder recommendations (advisory only)",
+        t("panel.product_sourcing"),
+        styled_table([t("col.product"), t("col.supplier_name"), "Lead time", "MOQ", "Pack", "Role"], sourcing_rows,
+                     empty_message=t("empty.no_supplier_products")),
+        subtitle=t("note.advisory_reorder"),
     )
 
     link_panel = _build_link_panel(page, navigate, products, suppliers)
@@ -97,18 +98,18 @@ def _build_link_panel(page: ft.Page, navigate: Callable[[str], None], products, 
     app = app_context
     if not products or not suppliers:
         return section(
-            "Link a product to a supplier",
-            empty_state("Not enough data", "Add at least one product and one supplier first."),
+            t("panel.link_product_supplier"),
+            empty_state(t("status.not_enough_data"), "Add at least one product and one supplier first."),
             expand=True,
         )
 
-    product_dd = dropdown_field("Product", [(str(p.id), p.name) for p in products], value=str(products[0].id))
-    supplier_dd = dropdown_field("Supplier", [(str(s.id), s.name) for s in suppliers], value=str(suppliers[0].id))
-    lead = text_field("Lead time (days)", value="3")
-    moq = text_field("Minimum order qty", value="1")
-    pack = text_field("Pack size", value="1")
-    cost = text_field("Unit cost (optional)")
-    preferred = ft.Switch(label="Preferred supplier", value=True,
+    product_dd = dropdown_field(t("col.product"), [(str(p.id), p.name) for p in products], value=str(products[0].id))
+    supplier_dd = dropdown_field(t("col.supplier_name"), [(str(s.id), s.name) for s in suppliers], value=str(suppliers[0].id))
+    lead = text_field(t("field.lead_time"), value="3")
+    moq = text_field(t("field.min_order_qty"), value="1")
+    pack = text_field(t("field.pack_size"), value="1")
+    cost = text_field(t("field.unit_cost"))
+    preferred = ft.Switch(label=t("field.preferred_supplier_short"), value=True,
                           label_text_style=ft.TextStyle(color=T.TEXT_SECONDARY, size=T.FONT_SMALL))
 
     def link(e) -> None:
@@ -120,16 +121,16 @@ def _build_link_panel(page: ft.Page, navigate: Callable[[str], None], products, 
                 unit_cost=Decimal(cost.value) if (cost.value or "").strip() else None,
                 is_preferred=bool(preferred.value),
             ))
-            notify(page, "Product linked to supplier", "success")
+            notify(page, t("toast.product_linked"), "success")
             navigate("/suppliers")
         except (StockWiseError, ValueError, InvalidOperation) as exc:
             notify_error(page, exc)
 
     return section(
-        "Link a product to a supplier",
+        t("panel.link_product_supplier"),
         ft.Column(spacing=T.GAP_SMALL, controls=[
             product_dd, supplier_dd, lead, moq, pack, cost, preferred,
-            ft.Button(content="Link product", icon=ft.Icons.LINK, on_click=link),
+            ft.Button(content=t("action.link_product"), icon=ft.Icons.LINK, on_click=link),
         ]),
         expand=True,
     )
@@ -138,13 +139,13 @@ def _build_link_panel(page: ft.Page, navigate: Callable[[str], None], products, 
 def _open_add_supplier(page: ft.Page, navigate: Callable[[str], None]) -> None:
     app = app_context
     fields = {
-        "name": text_field("Supplier name *", autofocus=True),
-        "contact": text_field("Contact person"),
-        "phone": text_field("Phone"),
-        "email": text_field("Email"),
-        "website": text_field("Website"),
-        "address": text_field("Address", multiline=True),
-        "notes": text_field("Notes", multiline=True),
+        "name": text_field(t("field.supplier_name"), autofocus=True),
+        "contact": text_field(t("field.contact_person")),
+        "phone": text_field(t("field.phone")),
+        "email": text_field(t("field.email")),
+        "website": text_field(t("field.website")),
+        "address": text_field(t("field.address"), multiline=True),
+        "notes": text_field(t("field.notes"), multiline=True),
     }
 
     def save(e) -> None:
@@ -159,12 +160,12 @@ def _open_add_supplier(page: ft.Page, navigate: Callable[[str], None]) -> None:
                 notes=(fields["notes"].value or "").strip() or None,
             ))
             page.pop_dialog()
-            notify(page, "Supplier added", "success")
+            notify(page, t("toast.supplier_added"), "success")
             navigate("/suppliers")
         except StockWiseError as exc:
             notify_error(page, exc)
 
-    _show_supplier_dialog(page, "Add supplier", list(fields.values()), save)
+    _show_supplier_dialog(page, t("action.add_supplier"), list(fields.values()), save)
 
 
 def _open_edit_supplier(page: ft.Page, navigate: Callable[[str], None], supplier_id: int) -> None:
@@ -173,15 +174,15 @@ def _open_edit_supplier(page: ft.Page, navigate: Callable[[str], None], supplier
     if supplier is None:
         return
     fields = {
-        "name": text_field("Supplier name *", value=supplier.name, autofocus=True),
-        "contact": text_field("Contact person", value=supplier.contact or ""),
-        "phone": text_field("Phone", value=supplier.phone or ""),
-        "email": text_field("Email", value=supplier.email or ""),
-        "website": text_field("Website", value=supplier.website_url or ""),
-        "address": text_field("Address", value=supplier.address or "", multiline=True),
-        "notes": text_field("Notes", value=supplier.notes or "", multiline=True),
+        "name": text_field(t("field.supplier_name"), value=supplier.name, autofocus=True),
+        "contact": text_field(t("field.contact_person"), value=supplier.contact or ""),
+        "phone": text_field(t("field.phone"), value=supplier.phone or ""),
+        "email": text_field(t("field.email"), value=supplier.email or ""),
+        "website": text_field(t("field.website"), value=supplier.website_url or ""),
+        "address": text_field(t("field.address"), value=supplier.address or "", multiline=True),
+        "notes": text_field(t("field.notes"), value=supplier.notes or "", multiline=True),
     }
-    active = ft.Switch(label="Active", value=supplier.active,
+    active = ft.Switch(label=t("field.active"), value=supplier.active,
                        label_text_style=ft.TextStyle(color=T.TEXT_SECONDARY, size=T.FONT_SMALL))
 
     def save(e) -> None:
@@ -197,12 +198,12 @@ def _open_edit_supplier(page: ft.Page, navigate: Callable[[str], None], supplier
                 active=bool(active.value),
             ))
             page.pop_dialog()
-            notify(page, "Supplier updated", "success")
+            notify(page, t("toast.supplier_updated"), "success")
             navigate("/suppliers")
         except StockWiseError as exc:
             notify_error(page, exc)
 
-    _show_supplier_dialog(page, "Edit supplier", list(fields.values()) + [active], save)
+    _show_supplier_dialog(page, t("action.edit_supplier"), list(fields.values()) + [active], save)
 
 
 def _show_supplier_dialog(page: ft.Page, title: str, controls: list[ft.Control], on_save: Callable) -> None:
@@ -211,8 +212,8 @@ def _show_supplier_dialog(page: ft.Page, title: str, controls: list[ft.Control],
         title=ft.Text(title),
         content=ft.Container(width=420, content=ft.Column(tight=True, spacing=T.GAP_SMALL, controls=controls)),
         actions=[
-            ft.TextButton(content="Cancel", on_click=lambda e: page.pop_dialog()),
-            ft.Button(content="Save", on_click=on_save),
+            ft.TextButton(content=t("action.cancel"), on_click=lambda e: page.pop_dialog()),
+            ft.Button(content=t("action.save"), on_click=on_save),
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )

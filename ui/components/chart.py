@@ -152,7 +152,17 @@ def area_chart(
     band_color = band_color or ft.Colors.with_opacity(0.12, forecast_line_color)
     y_fmt = value_formatter or _short
 
-    upper_values = [max(0.0, float(u)) for u in upper] if upper else None
+    # A ``None`` upper bound means "no bound for this point". Treat it as the
+    # point value rather than crashing: the band is decorative, and one missing
+    # bound should not take down the whole dashboard. A wholly absent band is
+    # still handled by the ``else None`` branch below.
+    if upper:
+        upper_values = [
+            max(0.0, float(v if v is not None else b))
+            for v, b in zip(upper, values)
+        ]
+    else:
+        upper_values = None
     steps = _sample_steps(len(values))
     smooth = _interpolate(values, steps)
     smooth_upper = _interpolate(upper_values, steps) if upper_values else None

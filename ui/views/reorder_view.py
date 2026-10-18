@@ -15,6 +15,7 @@ import flet as ft
 
 from app.bootstrap import app_context
 from app.theme import StockWiseTheme as T
+from app.i18n import t
 from domain.exceptions import StockWiseError
 from domain.money import format_money
 from domain.reorder import ReorderRecommendation
@@ -83,7 +84,7 @@ def _why_dialog(reco: ReorderRecommendation) -> ft.AlertDialog:
                 controls=lines + [ft.Divider(height=1, color=T.BORDER_SUBTLE), *notes],
             ),
         ),
-        actions=[ft.TextButton(content="Close", on_click=lambda e: e.page.pop_dialog())],
+        actions=[ft.TextButton(content=t("action.close"), on_click=lambda e: e.page.pop_dialog())],
         actions_alignment=ft.MainAxisAlignment.END,
     )
 
@@ -94,11 +95,11 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
 
     if not products:
         return scroll_column([
-            page_header("Reorder Center", "Review replenishment recommendations"),
+            page_header(t("nav.reorder"), t("dashboard.reorder_subtitle")),
             ft.Container(
                 expand=True, bgcolor=T.BG_CARD, border_radius=T.RADIUS,
                 border=ft.Border.all(1, T.BORDER_SUBTLE),
-                content=empty_state("No products yet",
+                content=empty_state(t("empty.no_products"),
                                     "Add products and record sales to get reorder suggestions.",
                                     icon=ft.Icons.SHOPPING_CART_CHECKOUT_OUTLINED),
             ),
@@ -166,7 +167,7 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         note_holder.controls = [
             banner("Recommendations are advisory only \u2014 nothing is ordered automatically.", "info")
         ] if recos else [
-            banner("Every product is covered for its protection period. No orders needed.", "success")
+            banner(t("note.all_covered"), "success")
         ]
 
         rows: list[ft.DataRow] = []
@@ -181,31 +182,31 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
                 chip_cell("Expiry risk", "at_risk") if reco.expiry_review_required
                 else text_cell("\u2014", color=T.TEXT_TERTIARY),
                 action_cell(lambda e, r=reco: page.show_dialog(_why_dialog(r)),
-                            icon=ft.Icons.HELP_OUTLINE, tooltip="Why this recommendation?"),
+                            icon=ft.Icons.HELP_OUTLINE, tooltip=t("why.title")),
                 action_cell(lambda e, r=reco: _record_order(r),
-                            icon=ft.Icons.CHECK_CIRCLE_OUTLINE, tooltip="Record this order"),
+                            icon=ft.Icons.CHECK_CIRCLE_OUTLINE, tooltip=t("action.record_order")),
             ]))
 
         table_holder.controls = [
             styled_table(
                 ["Product", "Urgency", "Suggested", "Est. cost", "Stockout in", "Expiry", "", ""],
-                rows, empty_message="No products need reordering right now.",
+                rows, empty_message=t("empty.no_reorder"),
             )
         ]
         page.update()
 
     header = page_header(
-        "Reorder Center",
+        t("nav.reorder"),
         "Periodic-review recommendations (advisory \u2014 you decide)",
         actions=[
-            ft.OutlinedButton(content="Generate", icon=ft.Icons.REFRESH, on_click=lambda e: render()),
+            ft.OutlinedButton(content=t("action.generate"), icon=ft.Icons.REFRESH, on_click=lambda e: render()),
         ],
     )
 
     toolbar = flow_row([
         (budget_field, {"xs": 12, "sm": 6, "lg": 3}),
         (
-            ft.Button(content="Recalculate", icon=ft.Icons.CALCULATE, on_click=lambda e: render()),
+            ft.Button(content=t("action.recalculate"), icon=ft.Icons.CALCULATE, on_click=lambda e: render()),
             {"xs": 12, "sm": 6, "lg": 3},
         ),
     ])
@@ -217,5 +218,5 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         toolbar,
         note_holder,
         kpi_holder,
-        section("Recommendations", table_holder),
+        section(t("nav.reorder"), table_holder),
     ])

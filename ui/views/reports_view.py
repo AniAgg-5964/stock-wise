@@ -14,6 +14,7 @@ import flet as ft
 from app.bootstrap import app_context
 from app.config import Config
 from app.theme import StockWiseTheme as T
+from app.i18n import t
 from domain.money import format_money
 from ui.components.chart import bar_chart
 from ui.components.empty_state import empty_state
@@ -40,9 +41,9 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
     purchasing = reports.purchasing_summary()
 
     header = page_header(
-        "Reports",
+        t("nav.reports"),
         f"Sales, stock, forecasting and purchasing \u00b7 last {_PERIOD} days",
-        actions=[ft.OutlinedButton(content="Refresh", icon=ft.Icons.REFRESH,
+        actions=[ft.OutlinedButton(content=t("action.refresh"), icon=ft.Icons.REFRESH,
                                    on_click=lambda e: navigate("/reports"))],
     )
 
@@ -69,7 +70,7 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         ),
         title=(f"{waste_units:g} units written off in the last {_WASTE_PERIOD} days"
                if waste_units else f"Nothing written off in the last {_WASTE_PERIOD} days"),
-        subtitle="Stock removed as expired or damaged \u2014 see the expiry ledger for detail",
+        subtitle=t("note.waste_detail"),
     )
 
     # ---- sales trend ---------------------------------------------------------
@@ -77,9 +78,9 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         chart = bar_chart([float(r["revenue"]) for r in by_day],
                           [str(r["day"])[5:] for r in by_day], height=200)
     else:
-        chart = empty_state("No sales in this period", "Record sales to populate this report.",
+        chart = empty_state(t("empty.no_sales_period"), "Record sales to populate this report.",
                             icon=ft.Icons.SHOW_CHART)
-    sales_panel = section("Revenue by day", chart, subtitle=f"Last {_PERIOD} days", expand=True)
+    sales_panel = section(t("panel.revenue_by_day"), chart, subtitle=f"Last {_PERIOD} days", expand=True)
 
     # ---- top products --------------------------------------------------------
     top_rows = [
@@ -91,8 +92,8 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         ])
         for i, r in enumerate(top)
     ]
-    top_panel = section("Top products", styled_table(["#", "Product", "Units", "Revenue"], top_rows,
-                                                     empty_message="No sales yet."),
+    top_panel = section(t("panel.top_products"), styled_table(["#", "Product", "Units", "Revenue"], top_rows,
+                                                     empty_message=t("empty.no_sales")),
                         subtitle=f"By revenue \u00b7 last {_PERIOD} days", expand=True)
 
     # ---- stock valuation -----------------------------------------------------
@@ -107,8 +108,8 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         for r in valuation["rows"][:12]
     ]
     val_panel = section(
-        "Stock valuation", styled_table(["Product", "On hand", "Value", "Expired"], val_rows,
-                                        empty_message="No products yet."),
+        t("panel.stock_valuation"), styled_table(["Product", "On hand", "Value", "Expired"], val_rows,
+                                        empty_message=t("empty.no_products_short")),
         subtitle=f"Total {format_money(valuation['total_value'])} \u00b7 expired "
                  f"{format_money(valuation['expired_value'])}",
     )
@@ -118,9 +119,9 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
     if model.get("available"):
         model_line = ft.Row(spacing=T.GAP_SMALL, controls=[
             ft.Text(f"Model: {model.get('version') or 'n/a'}", size=T.FONT_SMALL, color=T.TEXT_PRIMARY),
-            ft.Text("adopted" if model.get("adopted") else "candidate (not adopted)",
+            ft.Text(t("status.adopted") if model.get(t("status.adopted")) else "candidate (not adopted)",
                     size=T.FONT_SMALL,
-                    color=T.STATUS_HEALTHY if model.get("adopted") else T.STATUS_WARNING,
+                    color=T.STATUS_HEALTHY if model.get(t("status.adopted")) else T.STATUS_WARNING,
                     weight=ft.FontWeight.W_600),
         ])
     else:
@@ -137,7 +138,7 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         for r in accuracy["products"][:12]
     ]
     acc_panel = section(
-        "Forecast accuracy",
+        t("panel.forecast_accuracy"),
         ft.Column(spacing=T.GAP_SMALL, controls=[
             model_line,
             styled_table(["Product", "Best method", "WAPE", "MAE"], acc_rows,
@@ -149,7 +150,7 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
     # ---- waste + purchasing --------------------------------------------------
     waste_rows = [ft.DataRow(cells=[text_cell(r["name"]), text_cell(f"{r['qty']:g}")])
                   for r in waste["rows"][:8]]
-    waste_panel = section("Waste & shrinkage", styled_table(["Product", "Units"], waste_rows,
+    waste_panel = section(t("panel.waste_shrinkage"), styled_table(["Product", "Units"], waste_rows,
                                                             empty_message="No waste recorded \u2014 good."),
                           subtitle=f"Written off in the last {_WASTE_PERIOD} days", expand=True)
 
@@ -162,9 +163,9 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         ])
         for po in purchasing["open"][:8]
     ]
-    po_panel = section("Open purchase orders",
+    po_panel = section(t("panel.open_orders"),
                        styled_table(["PO", "Supplier", "Status", "Value"], po_rows,
-                                    empty_message="No open orders."),
+                                    empty_message=t("empty.no_orders")),
                        subtitle=f"{purchasing['open_count']} open \u00b7 "
                                 f"{format_money(purchasing['open_value'])} committed", expand=True)
 
@@ -177,26 +178,26 @@ def build_reports_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
             notify_error(page, exc)
 
     export_panel = section(
-        "Export reports (CSV)",
+        t("panel.export_reports"),
         flow_row([
-            ft.OutlinedButton(content="Sales by day", icon=ft.Icons.TABLE_VIEW,
+            ft.OutlinedButton(content=t("panel.sales_by_day"), icon=ft.Icons.TABLE_VIEW,
                               on_click=lambda e: export(
                                   "report_sales_by_day.csv", ["day", "revenue", "units"],
                                   [{"day": r["day"], "revenue": r["revenue"], "units": r["units"]} for r in by_day])),
-            ft.OutlinedButton(content="Top products", icon=ft.Icons.LEADERBOARD,
+            ft.OutlinedButton(content=t("panel.top_products"), icon=ft.Icons.LEADERBOARD,
                               on_click=lambda e: export(
                                   "report_top_products.csv", ["name", "qty", "revenue"], top)),
-            ft.OutlinedButton(content="Stock valuation", icon=ft.Icons.ACCOUNT_BALANCE_WALLET_OUTLINED,
+            ft.OutlinedButton(content=t("panel.stock_valuation"), icon=ft.Icons.ACCOUNT_BALANCE_WALLET_OUTLINED,
                               on_click=lambda e: export(
                                   "report_stock_valuation.csv",
                                   ["product_id", "name", "unit", "qty", "value", "expired_qty", "expired_value"],
                                   valuation["rows"])),
-            ft.OutlinedButton(content="Forecast accuracy", icon=ft.Icons.INSIGHTS_OUTLINED,
+            ft.OutlinedButton(content=t("panel.forecast_accuracy"), icon=ft.Icons.INSIGHTS_OUTLINED,
                               on_click=lambda e: export(
                                   "report_forecast_accuracy.csv",
                                   ["product_id", "name", "best_method", "wape", "mae"],
                                   accuracy["products"])),
-            ft.OutlinedButton(content="Waste", icon=ft.Icons.DELETE_OUTLINE,
+            ft.OutlinedButton(content=t("panel.waste"), icon=ft.Icons.DELETE_OUTLINE,
                               on_click=lambda e: export("report_waste.csv", ["name", "qty"], waste["rows"])),
         ], col={"xs": 12, "sm": 6, "lg": 4}),
         subtitle=f"Files are written to {EXPORT_DIR}",

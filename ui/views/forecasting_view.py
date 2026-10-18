@@ -14,6 +14,7 @@ import flet as ft
 from app.bootstrap import app_context
 from app.config import Config
 from app.theme import StockWiseTheme as T
+from app.i18n import t
 from domain.exceptions import StockWiseError
 from ml.evaluate import format_wape
 from ui.components.chart import bar_chart, chart_legend
@@ -50,14 +51,14 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
 
     if not products:
         return scroll_column([
-            page_header("Forecasting", "Generate and review demand forecasts"),
+            page_header(t("nav.forecasting"), t("dashboard.forecast_subtitle")),
             ft.Container(
                 expand=True,
                 bgcolor=T.BG_CARD,
                 border_radius=T.RADIUS,
                 border=ft.Border.all(1, T.BORDER_SUBTLE),
                 content=empty_state(
-                    "No products yet",
+                    t("empty.no_products"),
                     "Add products and record some sales, then come back to forecast demand.",
                     icon=ft.Icons.INSIGHTS_OUTLINED,
                 ),
@@ -75,11 +76,11 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
     method_text = ft.Text("", size=T.FONT_TINY, color=T.TEXT_TERTIARY)
 
     horizon_field = text_field(
-        "Horizon (days)",
+        t("field.horizon"),
         value=str(Config.DEFAULT_FORECAST_HORIZON),
         width=150,
     )
-    method_dd = dropdown_field("Method", _METHODS, value="auto", width=260)
+    method_dd = dropdown_field(t("field.method"), _METHODS, value="auto", width=260)
 
     def _horizon() -> int:
         try:
@@ -101,7 +102,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
 
         adopted = bool(status.get("adopted"))
         controls.append(banner(
-            "XGBoost model adopted and in use."
+            t("toast.model_adopted")
             if adopted
             else "Model trained but not adopted \u2014 the baseline performed better on holdout.",
             "success" if adopted else "warning",
@@ -125,7 +126,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
                 text_cell(f"{m.get('bias', 0):+.2f}", color=T.TEXT_SECONDARY),
                 text_cell(str(m.get("n", 0)), color=T.TEXT_SECONDARY),
             ]))
-        controls.append(styled_table(["Model", "MAE (units)", "WAPE", "Bias", "Days tested"], rows))
+        controls.append(styled_table([t("panel.model"), "MAE (units)", "WAPE", "Bias", "Days tested"], rows))
         if status.get("trained_at"):
             controls.append(ft.Text(
                 f"Trained {status['trained_at']} \u00b7 {status.get('version') or ''} \u00b7 {status.get('notes', '')}",
@@ -142,7 +143,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
             return
         notify(
             page,
-            "Model trained and adopted." if summary.get("adopted")
+            t("toast.model_trained") if summary.get("adopted")
             else "Model trained but not adopted \u2014 baseline is better.",
             "success" if summary.get("adopted") else "warning",
         )
@@ -176,13 +177,13 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
             kpi_strip([
                 KpiMetric("Average daily demand", f"{result.average_daily_demand:g}",
                           caption="units/day (last 28 days)", icon=ft.Icons.TIMELINE),
-                KpiMetric(f"Forecast \u00b7 next {len(result.points)} days", f"{result.total_qty:g}",
+                KpiMetric(t("metric.forecast_next", days=len(result.points)), f"{result.total_qty:g}",
                           caption="units expected", icon=ft.Icons.STACKED_LINE_CHART,
                           accent=T.ACCENT),
                 KpiMetric("Observed sales days", str(result.observed_days),
                           caption=f"minimum {Config.MIN_TRAINING_DAYS} for a model",
                           icon=ft.Icons.CALENDAR_MONTH_OUTLINED),
-                KpiMetric("Method", "Baseline" if result.is_baseline else "XGBoost",
+                KpiMetric(t("field.method"), "Baseline" if result.is_baseline else "XGBoost",
                           caption=result.method_label, icon=ft.Icons.MODEL_TRAINING_OUTLINED,
                           accent=T.STATUS_INFO if result.is_baseline else T.STATUS_HEALTHY),
             ])
@@ -209,7 +210,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         fc_vals = [p.predicted_qty for p in result.points]
         labels = [_day_label(p.date) for p in history] + [_day_label(p.target_date) for p in result.points]
         chart_holder.controls = [
-            chart_legend([("History", T.PRIMARY), ("Forecast", T.ACCENT)]),
+            chart_legend([(t("chart.history"), T.PRIMARY), (t("chart.forecast"), T.ACCENT)]),
             bar_chart(hist_vals + fc_vals, labels, forecast_from=len(hist_vals)),
         ]
 
@@ -227,9 +228,9 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         ]
         metrics_holder.controls = [
             styled_table(
-                ["Method", "MAE (units)", "WAPE", "Bias", "Days tested"],
+                [t("field.method"), "MAE (units)", "WAPE", "Bias", "Days tested"],
                 rows,
-                empty_message="Not enough history to back-test yet.",
+                empty_message=t("empty.no_history"),
             )
         ]
 
@@ -264,7 +265,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         page.update()
 
     product_dd = dropdown_field(
-        "Product",
+        t("col.product"),
         [(str(p.id), f"{p.name} ({p.sku})") for p in products],
         value=str(products[0].id),
         width=360,
@@ -276,11 +277,11 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         "7-day demand forecast with transparent baseline accuracy",
         actions=[
             ft.OutlinedButton(
-                content="Rebuild", icon=ft.Icons.REFRESH,
+                content=t("action.rebuild"), icon=ft.Icons.REFRESH,
                 on_click=lambda e: load(regenerate=True),
             ),
             ft.Button(
-                content="Generate forecast", icon=ft.Icons.INSIGHTS,
+                content=t("action.generate_forecast"), icon=ft.Icons.INSIGHTS,
                 on_click=lambda e: load(regenerate=True),
             ),
         ],
@@ -299,16 +300,16 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         controls_row,
         note_holder,
         kpi_holder,
-        section("Demand history and forecast", chart_holder,
+        section(t("panel.demand_forecast"), chart_holder,
                 subtitle=None),
         method_text,
-        section("Baseline accuracy (chronological holdout)", metrics_holder),
+        section(t("panel.baseline_accuracy"), metrics_holder),
         section(
-            "Model",
+            t("panel.model"),
             model_holder,
             subtitle="XGBoost is adopted only when it beats the baseline on holdout data",
-            actions=[ft.OutlinedButton(content="Train model", icon=ft.Icons.MODEL_TRAINING,
+            actions=[ft.OutlinedButton(content=t("action.train_model"), icon=ft.Icons.MODEL_TRAINING,
                                        on_click=train_model)],
         ),
-        section("Forecast detail", table_holder),
+        section(t("panel.forecast_detail"), table_holder),
     ])

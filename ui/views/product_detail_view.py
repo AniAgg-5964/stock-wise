@@ -14,6 +14,7 @@ import flet as ft
 
 from app.bootstrap import app_context
 from app.theme import StockWiseTheme as T
+from app.i18n import t
 from domain.entities import Product
 from domain.exceptions import StockWiseError
 from domain.money import format_money
@@ -60,9 +61,9 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
     product = app.product_service.get_product(product_id)
     if product is None:
         return ft.Column(controls=[
-            page_header("Product not found", "It may have been removed"),
-            empty_state("Product not found", "Return to the inventory list and pick another product.",
-                        action=ft.Button(content="Back to inventory", on_click=lambda e: navigate("/inventory"))),
+            page_header(t("empty.product_not_found"), "It may have been removed"),
+            empty_state(t("empty.product_not_found"), "Return to the inventory list and pick another product.",
+                        action=ft.Button(content=t("action.back_to_inventory"), on_click=lambda e: navigate("/inventory"))),
         ], expand=True)
 
     snapshot = app.inventory_service.stock_snapshot(product)
@@ -74,12 +75,12 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
         product.name,
         f"{product.sku} \u00b7 {product.category}",
         actions=[
-            ft.TextButton(content="Back", icon=ft.Icons.ARROW_BACK, on_click=lambda e: navigate("/inventory")),
-            ft.OutlinedButton(content="Edit", icon=ft.Icons.EDIT_OUTLINED,
+            ft.TextButton(content=t("action.back"), icon=ft.Icons.ARROW_BACK, on_click=lambda e: navigate("/inventory")),
+            ft.OutlinedButton(content=t("action.edit"), icon=ft.Icons.EDIT_OUTLINED,
                               on_click=lambda e: _open_edit(page, product, navigate)),
-            ft.OutlinedButton(content="Adjust stock", icon=ft.Icons.TUNE,
+            ft.OutlinedButton(content=t("action.adjust_stock"), icon=ft.Icons.TUNE,
                               on_click=lambda e: _open_adjust(page, product, navigate)),
-            ft.Button(content="Record waste", icon=ft.Icons.DELETE_OUTLINE,
+            ft.Button(content=t("action.record_waste"), icon=ft.Icons.DELETE_OUTLINE,
                       on_click=lambda e: _open_waste(page, product, navigate)),
         ],
     )
@@ -100,16 +101,16 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
     ])
 
     details = section(
-        "Product details",
+        t("panel.product_details"),
         ft.Column(spacing=T.GAP_SMALL, controls=[
             _detail_row("Status", status_chip(_status_label(snapshot.status), snapshot.status)),
-            _detail_row("Brand", ft.Text(product.brand or "\u2014", color=T.TEXT_PRIMARY)),
-            _detail_row("Unit", ft.Text(product.unit, color=T.TEXT_PRIMARY)),
-            _detail_row("Cost price", ft.Text(format_money(product.cost_price), color=T.TEXT_PRIMARY)),
-            _detail_row("Selling price", ft.Text(format_money(product.selling_price), color=T.TEXT_PRIMARY)),
-            _detail_row("Reorder point", ft.Text(str(product.reorder_point), color=T.TEXT_PRIMARY)),
-            _detail_row("Safety stock", ft.Text(str(product.safety_stock), color=T.TEXT_PRIMARY)),
-            _detail_row("Expiry tracking", ft.Text("On" if product.expiry_tracking else "Off", color=T.TEXT_PRIMARY)),
+            _detail_row(t("field.brand"), ft.Text(product.brand or "\u2014", color=T.TEXT_PRIMARY)),
+            _detail_row(t("field.unit"), ft.Text(product.unit, color=T.TEXT_PRIMARY)),
+            _detail_row(t("field.cost_price"), ft.Text(format_money(product.cost_price), color=T.TEXT_PRIMARY)),
+            _detail_row(t("field.selling_price"), ft.Text(format_money(product.selling_price), color=T.TEXT_PRIMARY)),
+            _detail_row(t("field.reorder_point"), ft.Text(str(product.reorder_point), color=T.TEXT_PRIMARY)),
+            _detail_row(t("field.safety_stock"), ft.Text(str(product.safety_stock), color=T.TEXT_PRIMARY)),
+            _detail_row("Expiry tracking", ft.Text(t("field.active") if product.expiry_tracking else "Off", color=T.TEXT_PRIMARY)),
             _detail_row("Nearest expiry", ft.Text(snapshot.nearest_expiry or "\u2014", color=T.TEXT_PRIMARY)),
         ]),
         expand=True,
@@ -125,12 +126,13 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
                     size=T.FONT_TINY, color=T.TEXT_TERTIARY,
                 ),
             ]),
-            status_chip("Preferred", "healthy") if link.is_preferred else status_chip("Backup", "neutral"),
+            status_chip(t("status.preferred"), "healthy") if link.is_preferred
+            else status_chip(t("status.backup"), "neutral"),
         ])
         for link, supplier in links
-    ]) if links else empty_state("No suppliers linked", "Link a supplier from the Supplier Research screen.",
+    ]) if links else empty_state(t("empty.no_suppliers_linked"), "Link a supplier from the Supplier Research screen.",
                                  icon=ft.Icons.STOREFRONT_OUTLINED)
-    suppliers_panel = section("Suppliers", supplier_rows, expand=True)
+    suppliers_panel = section(t("panel.suppliers"), supplier_rows, expand=True)
 
     batch_rows = [
         ft.DataRow(cells=[
@@ -145,9 +147,9 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
         for b in batches
     ]
     batches_panel = section(
-        "Batches (FEFO order)",
-        styled_table(["Batch", "Received", "Expiry", "Received qty", "Remaining", "Unit cost", "Status"],
-                     batch_rows, empty_message="No batches received yet."),
+        t("panel.batch_fefo"),
+        styled_table([t("field.batch"), "Received", "Expiry", "Received qty", "Remaining", "Unit cost", "Status"],
+                     batch_rows, empty_message=t("empty.no_movements_body")),
     )
 
     movement_rows = [
@@ -162,9 +164,9 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
         for m in movements
     ]
     movements_panel = section(
-        "Stock movement ledger",
+        t("panel.movement_ledger"),
         styled_table(["When", "Type", "Change", "Balance", "Reason"], movement_rows,
-                     empty_message="No movements recorded."),
+                     empty_message=t("empty.no_movements")),
         subtitle="Append-only \u2014 corrections are new records, never rewrites",
     )
 
@@ -206,17 +208,17 @@ def _batch_status(expiry: str | None) -> tuple[str, str]:
 def _open_edit(page: ft.Page, product: Product, navigate: Callable[[str], None]) -> None:
     app = app_context
     fields = {
-        "sku": text_field("SKU *", value=product.sku, width=250),
-        "name": text_field("Product name *", value=product.name, width=250),
-        "category": text_field("Category", value=product.category, width=250),
-        "unit": text_field("Unit", value=product.unit, width=250),
-        "brand": text_field("Brand", value=product.brand or "", width=250),
-        "cost": text_field("Cost price", value=str(product.cost_price), width=250),
-        "price": text_field("Selling price", value=str(product.selling_price), width=250),
-        "reorder": text_field("Reorder point", value=str(product.reorder_point), width=250),
-        "safety": text_field("Safety stock", value=str(product.safety_stock), width=250),
+        "sku": text_field(t("field.sku"), value=product.sku, width=250),
+        "name": text_field(t("field.product_name"), value=product.name, width=250),
+        "category": text_field(t("field.category"), value=product.category, width=250),
+        "unit": text_field(t("field.unit"), value=product.unit, width=250),
+        "brand": text_field(t("field.brand"), value=product.brand or "", width=250),
+        "cost": text_field(t("field.cost_price"), value=str(product.cost_price), width=250),
+        "price": text_field(t("field.selling_price"), value=str(product.selling_price), width=250),
+        "reorder": text_field(t("field.reorder_point"), value=str(product.reorder_point), width=250),
+        "safety": text_field(t("field.safety_stock"), value=str(product.safety_stock), width=250),
     }
-    expiry_switch = ft.Switch(label="Track expiry", value=product.expiry_tracking,
+    expiry_switch = ft.Switch(label=t("field.track_expiry"), value=product.expiry_tracking,
                               label_text_style=ft.TextStyle(color=T.TEXT_SECONDARY, size=T.FONT_SMALL))
 
     def save(e) -> None:
@@ -231,7 +233,7 @@ def _open_edit(page: ft.Page, product: Product, navigate: Callable[[str], None])
                 expiry_tracking=bool(expiry_switch.value), active=product.active,
             ))
             page.pop_dialog()
-            notify(page, "Product updated", "success")
+            notify(page, t("toast.product_updated"), "success")
             navigate(f"/product/{product.id}")
         except (StockWiseError, InvalidOperation, ValueError) as exc:
             notify_error(page, exc)
@@ -248,8 +250,8 @@ def _open_edit(page: ft.Page, product: Product, navigate: Callable[[str], None])
 
 def _open_adjust(page: ft.Page, product: Product, navigate: Callable[[str], None]) -> None:
     app = app_context
-    delta = text_field("Quantity change (use negative to reduce) *", value="0", width=340)
-    reason = text_field("Reason *", width=340)
+    delta = text_field(t("field.qty_change"), value="0", width=340)
+    reason = text_field(t("field.reason"), width=340)
 
     def save(e) -> None:
         try:
@@ -257,7 +259,7 @@ def _open_adjust(page: ft.Page, product: Product, navigate: Callable[[str], None
                 product.id, _float(delta.value), reason=(reason.value or "").strip()
             )
             page.pop_dialog()
-            notify(page, "Stock adjusted", "success")
+            notify(page, t("toast.stock_adjusted"), "success")
             navigate(f"/product/{product.id}")
         except (StockWiseError, ValueError) as exc:
             notify_error(page, exc)
@@ -269,13 +271,13 @@ def _open_waste(page: ft.Page, product: Product, navigate: Callable[[str], None]
     app = app_context
     batches = app.inventory_service.get_batches(product.id, include_depleted=False)
     batch_dd = dropdown_field(
-        "Batch",
+        t("field.batch"),
         [(str(b.id), f"{b.batch_code or '#' + str(b.id)} \u00b7 exp {b.expiry_date or '\u2014'} \u00b7 {b.quantity_remaining:g}")
          for b in batches] or [("__none__", "No batches available")],
         value=str(batches[0].id) if batches else "__none__", width=380,
     )
-    quantity = text_field("Quantity *", width=380)
-    reason = text_field("Reason * (e.g. spoilage, expired)", width=380)
+    quantity = text_field(t("field.quantity"), width=380)
+    reason = text_field(t("field.reason_example"), width=380)
 
     def save(e) -> None:
         try:
@@ -284,7 +286,7 @@ def _open_waste(page: ft.Page, product: Product, navigate: Callable[[str], None]
                 product.id, _float(quantity.value), reason=(reason.value or "").strip(), batch_id=batch_id
             )
             page.pop_dialog()
-            notify(page, "Waste recorded", "success")
+            notify(page, t("toast.waste_recorded"), "success")
             navigate(f"/product/{product.id}")
         except (StockWiseError, ValueError) as exc:
             notify_error(page, exc)
@@ -298,8 +300,8 @@ def _show_form(page: ft.Page, title: str, controls: list[ft.Control], on_save: C
         title=ft.Text(title),
         content=ft.Container(width=420, content=ft.Column(tight=True, spacing=T.GAP_SMALL, controls=controls)),
         actions=[
-            ft.TextButton(content="Cancel", on_click=lambda e: page.pop_dialog()),
-            ft.Button(content="Save", on_click=on_save),
+            ft.TextButton(content=t("action.cancel"), on_click=lambda e: page.pop_dialog()),
+            ft.Button(content=t("action.save"), on_click=on_save),
         ],
         actions_alignment=ft.MainAxisAlignment.END,
     )
