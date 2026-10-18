@@ -78,7 +78,7 @@ whenever the model is missing or worse than the baseline):
 | **Forecasting** | Generate forecasts (baselines + XGBoost), see accuracy vs baselines, the likely range around each day, and train the model. |
 | **Reorder Center** | Periodic-review recommendations with a "Why?" breakdown (P = L + R, safety stock, inventory position, MOQ/pack, budget), and recording the order you decide to place. |
 | **Expiry Management** | Batches by expiry, FEFO-aware "at risk" estimates, estimated value at risk, waste write-off. |
-| **Supplier Research** | Supplier records and product links (lead time, MOQ, pack, cost). Live web research is the optional TinyFish stage. |
+| **Supplier Research** | Supplier records and product links (lead time, MOQ, pack, cost), plus optional live web research (TinyFish): candidate prices/MOQ/lead times for you to verify and apply. |
 | **Reports** | Sales/margin, top products, stock valuation, forecast accuracy, waste, open purchase orders — all exportable to CSV. |
 | **Data & Imports** | Validated CSV import (row-level errors) and CSV export. |
 | **Settings** | Store preferences, baseline fallback, safety-stock policy and service level, budget, forecast model management, backups, diagnostics. |
@@ -149,6 +149,7 @@ Flet UI (views + components)
         -> SQLite
   ML pipeline   -> behind ForecastService / ModelService
   TinyFish      -> behind SupplierResearchService (optional, never a startup dependency)
+                   free Search/Fetch only; opt-in, capped, advisory results
 ```
 
 Hard rules: UI has no SQL/ML/reorder/business logic; sales + stock movement are
@@ -168,7 +169,7 @@ SQLite boundary.
 - [x] Stage 5 — Forecast UI and explanations
 - [x] Stage 6 — Periodic-review reorder engine, MOQ/pack, budget, expiry-aware
 - [x] Stage 7 — Expiry management, alerts, dashboard panels
-- [x] Stage 8 — TinyFish supplier research *(optional; not started)*
+- [x] Stage 8 — TinyFish supplier research (optional, opt-in, free tier only)
 - [x] Stage 9 — Reports, inventory/alert hardening, CSV exports
 - [x] Stage 10 — Docs, packaging, acceptance tests
 
@@ -182,8 +183,40 @@ separate from synthetic scenario outputs. M5 raw data is large and its terms do
 not permit redistribution, so it will live in a gitignored `data/m5/` folder and
 only derived, license-safe artifacts will be produced by an ingestion script.
 
+## Supplier research (optional)
+
+The **Supplier Research** screen can search the live web for supplier pages via
+TinyFish and extract candidate facts from them.
+
+**Setup.** Put `TINYFISH_API_KEY` in a `.env` file next to `main.py` (copy
+`.env.example`), then restart. The panel stays inert until you switch
+*Enable live web research* on. Everything else in StockWise works without a key.
+
+**How it works.**
+
+1. **Search** — TinyFish Search (`api.search.tinyfish.ai`) returns ranked pages for a
+   product. Only fetchable URLs are kept: PDFs, images and non-http schemes are dropped.
+2. **Research** — TinyFish Fetch (`api.fetch.tinyfish.ai`) retrieves the page text. Pages that
+   are too thin, JS-only or behind a login wall are recorded and skipped.
+3. **Extract** — deterministic regexes pull out `unit_cost`, `minimum_order_qty`, `pack_size`
+   and `lead_time_days`. Every fact keeps the snippet that produced it and a confidence
+   score describing how explicitly the page stated the value.
+4. **Verify and apply** — *you* choose the supplier and apply. Only then is anything written
+   to `product_suppliers`, and the write is audited.
+
+**Guardrails.**
+
+- Advisory only: research never changes a supplier, cost, MOQ or lead time on its own.
+- Opt-in and off by default; nothing leaves the machine while it is off.
+- Free APIs only, with a per-action fetch cap and a 60-minute result cache.
+- Values are validated before use; a foreign-currency price is refused rather than
+  converted, and a non-numeric value can never reach a money column.
+- Only public pages are read; blocked sites are reported and skipped.
+
 ## License / data notes
 
-Zero-cost constraint: no paid APIs, hosting, or databases. TinyFish is optional
-and only uses existing credits. Review dataset terms before redistributing any
-benchmark data.
+Zero-cost constraint: no paid APIs, hosting, or databases. TinyFish is optional and
+uses only the free Search and Fetch APIs; the metered Agent and Browser APIs are
+deliberately not used, and each research action is capped so a stray loop cannot
+burn the daily allowance. Review dataset terms before redistributing any benchmark
+data.

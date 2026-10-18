@@ -90,6 +90,8 @@ class Config:
     DEFAULT_SAFETY_BUFFER_DAYS: int = 2
     DEFAULT_REVIEW_PERIOD_DAYS: int = 2
     DEFAULT_LEAD_TIME_DAYS: int = 3
+    DEFAULT_MINIMUM_ORDER_QTY: int = 1
+    DEFAULT_PACK_SIZE: int = 1
     NEAR_EXPIRY_WINDOW_DAYS: int = 7
     # "heuristic" = average demand x buffer days (default); "statistical" =
     # z x residual sigma over the protection period.
@@ -100,6 +102,11 @@ class Config:
     TINYFISH_TIMEOUT_SECONDS: int = 30
     TINYFISH_MAX_RETRIES: int = 2
     TINYFISH_CACHE_MINUTES: int = 60
+    #: Pages a single research action may fetch (stops a stray loop burning the
+    #: free daily allowance).
+    TINYFISH_MAX_FETCHES_PER_ACTION: int = 5
+    #: Live web research is opt-in and starts switched off.
+    DEFAULT_SUPPLIER_RESEARCH_ENABLED: bool = False
 
     # --- UI ---
     APP_NAME: str = "StockWise"

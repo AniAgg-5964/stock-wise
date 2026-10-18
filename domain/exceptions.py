@@ -57,3 +57,7 @@ class ModelUnavailableError(StockWiseError):
 
 class TinyFishError(StockWiseError):
     """TinyFish supplier research failed (never blocks core workflows)."""
+
+
+class ResearchNotConfiguredError(TinyFishError):
+    """Supplier research was requested but no API key is configured."""

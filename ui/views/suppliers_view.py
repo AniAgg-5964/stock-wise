@@ -20,6 +20,7 @@ from ui.components.feedback import notify, notify_error
 from ui.components.forms import dropdown_field, text_field
 from ui.components.layout import page_header, panel_grid, scroll_column, section
 from ui.components.table import action_cell, chip_cell, styled_table, text_cell
+from ui.views.supplier_research_panel import build_research_panel
 
 
 def build_suppliers_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Control:
@@ -88,6 +89,7 @@ def build_suppliers_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
         header,
         supplier_panel,
         panel_grid([(sourcing_panel, 7), (link_panel, 5)]),
+        build_research_panel(page, navigate, products, suppliers),
     ])
 
 

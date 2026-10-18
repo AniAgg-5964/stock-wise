@@ -129,3 +129,43 @@ class AuditEvent:
     occurred_at: str | None = None
     details: dict = field(default_factory=dict)
     created_by: str | None = None
+
+
+@dataclass
+class ExternalSource:
+    """A web page consulted during supplier research (TinyFish).
+
+    ``parse_status`` records how far the page got: ``pending`` when discovered,
+    ``ok`` when extracted, or a rejection reason (``login_wall``, ``too_short``…)
+    when the page was unusable.
+    """
+
+    provider: str
+    id: int | None = None
+    url: str | None = None
+    retrieved_at: str | None = None
+    query: str | None = None
+    status_code: int | None = None
+    parse_status: str = "pending"
+    content_hash: str | None = None
+
+
+@dataclass
+class SupplierObservation:
+    """A single fact found on the web about a product or supplier.
+
+    Observations are *candidates*: nothing reaches ``product_suppliers`` until the
+    user verifies and applies them. ``field_value`` stays text so a scraped page
+    can never inject a non-numeric value into a money column.
+    """
+
+    field_name: str
+    field_value: str
+    id: int | None = None
+    source_id: int | None = None
+    supplier_id: int | None = None
+    product_id: int | None = None
+    currency: str | None = None
+    confidence: float = 0.0
+    verified_by_user: bool = False
+    observed_at: str | None = None

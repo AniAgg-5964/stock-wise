@@ -22,6 +22,9 @@ build/
 # Environment variables
 .env
 
+# Agent/editor config \u2014 may contain personal API keys (e.g. MCP headers)
+opencode.json
+
 # IDE
 .vscode/
 .idea/

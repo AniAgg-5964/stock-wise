@@ -30,7 +30,9 @@ from application.services.product_service import ProductService
 from application.services.reorder_service import ReorderService
 from application.services.report_service import ReportService
 from application.services.sales_service import SalesService
+from application.services.supplier_research_service import SupplierResearchService
 from application.services.supplier_service import SupplierService
+from integrations.tinyfish.client import TinyFishClient
 from repositories.sqlite.audit_repository import SqliteAuditRepository
 from repositories.sqlite.connection import DatabaseConnection
 from repositories.sqlite.forecast_repository import SqliteForecastRepository
@@ -38,6 +40,10 @@ from repositories.sqlite.inventory_repository import SqliteInventoryRepository
 from repositories.sqlite.product_repository import SqliteProductRepository
 from repositories.sqlite.purchase_order_repository import SqlitePurchaseOrderRepository
 from repositories.sqlite.reorder_repository import SqliteReorderRepository
+from repositories.sqlite.research_repository import (
+    SqliteExternalSourceRepository,
+    SqliteSupplierObservationRepository,
+)
 from repositories.sqlite.sales_repository import SqliteSalesRepository
 from repositories.sqlite.settings_repository import SqliteSettingsRepository
 from repositories.sqlite.supplier_repository import SqliteSupplierRepository
@@ -78,6 +84,19 @@ def build_context(db: DatabaseConnection) -> SimpleNamespace:
     report_service = ReportService(
         db, product_service, inventory_service, forecast_service, purchase_orders, products
     )
+    # Supplier research is optional: the client does no I/O until a call is made,
+    # so an absent API key only disables the feature, never the app.
+    external_sources = SqliteExternalSourceRepository(db)
+    supplier_observations = SqliteSupplierObservationRepository(db)
+    tinyfish_client = TinyFishClient(
+        Config.TINYFISH_API_KEY,
+        timeout_seconds=Config.TINYFISH_TIMEOUT_SECONDS,
+        max_retries=Config.TINYFISH_MAX_RETRIES,
+    )
+    research_service = SupplierResearchService(
+        external_sources, supplier_observations, suppliers, products, audit, settings,
+        tinyfish_client,
+    )
 
     return SimpleNamespace(
         db=db,
@@ -88,6 +107,8 @@ def build_context(db: DatabaseConnection) -> SimpleNamespace:
         forecast_repo=forecast_repo,
         audit=audit,
         settings=settings,
+        external_sources=external_sources,
+        supplier_observations=supplier_observations,
         product_service=product_service,
         supplier_service=supplier_service,
         inventory_service=inventory_service,
@@ -100,6 +121,8 @@ def build_context(db: DatabaseConnection) -> SimpleNamespace:
         reorder_service=reorder_service,
         alert_service=alert_service,
         report_service=report_service,
+        tinyfish_client=tinyfish_client,
+        research_service=research_service,
         backup_service=BackupService(db),
         dashboard_service=DashboardService(product_service, inventory_service, sales_repo),
     )
