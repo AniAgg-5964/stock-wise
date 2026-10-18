@@ -152,7 +152,7 @@ class AppContext:
         logger.info("Data directory: %s", Config.APP_DATA_DIR)
         logger.info("Database: %s", Config.DB_PATH)
 
-        self.db = DatabaseConnection()
+        self.db = DatabaseConnection(reuse_connections=True)
         from repositories.sqlite.schema import initialize_database
 
         initialize_database(self.db)

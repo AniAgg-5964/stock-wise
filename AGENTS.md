@@ -129,3 +129,10 @@ than assuming older 0.x APIs. Specifics already hit:
   `snapshots_for_products` / `latest_for_products` pass across their panels.
   `dashboard_view` does this; a panel that re-queries per-panel is what made
   navigation take seconds.
+- `DatabaseConnection(reuse_connections=True)` caches one connection **per thread**
+  (set by `build_context` for the app). It is off by default so tests keep a fresh
+  connection per call and never hold a deleted temp file open on Windows. Never
+  hold a returned connection across a `with` block's end, and keep passing `conn=`
+  down to nested repository calls — a nested *fresh* connection during an open
+  write transaction would deadlock. Cold connections measured ~20ms for their first
+  query here versus ~0.4ms warm, so this is the single biggest performance lever.
