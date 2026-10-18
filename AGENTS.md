@@ -119,3 +119,13 @@ than assuming older 0.x APIs. Specifics already hit:
 - Schema is versioned via `schema_version`; bump `DB_SCHEMA_VERSION` and add a migration rather than altering tables in place.
 - Money is `Decimal` in the domain; repositories convert at the SQLite boundary (`to_money`/`to_db`).
   Never multiply a `Decimal` by a float — wrap the float in `Decimal(str(x))` first.
+- `ForecastService` memoises two demand-history reads (`demand_series`,
+  `backtest`). Both are pure functions of the `daily_demand` table, and
+  **`SalesService.record_sale` must keep calling `invalidate_demand_cache(...)`
+  after its transaction commits**. Any new writer of `daily_demand` must do the
+  same, or forecasts, alerts and reorder figures go stale. Stored `forecasts` are
+  deliberately *not* cached, so regenerating a forecast shows up immediately.
+- Views that render a whole screen should share one `products` /
+  `snapshots_for_products` / `latest_for_products` pass across their panels.
+  `dashboard_view` does this; a panel that re-queries per-panel is what made
+  navigation take seconds.

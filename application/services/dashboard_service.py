@@ -20,9 +20,17 @@ class DashboardService:
         self.inventory = inventory_service
         self.sales = sales_repo
 
-    def stats(self) -> DashboardStats:
-        products = list(self.product_service.list_products(active_only=True))
-        snapshots = self.inventory.snapshots_for_products(products)
+    def stats(self, *, products=None, snapshots=None) -> DashboardStats:
+        """Headline figures for the dashboard.
+
+        ``products`` / ``snapshots`` may be supplied when the caller has already
+        read them, so one screen does not rebuild the same inventory snapshot
+        several times over.
+        """
+        if products is None:
+            products = list(self.product_service.list_products(active_only=True))
+        if snapshots is None:
+            snapshots = self.inventory.snapshots_for_products(products)
         by_id = {s.product.id: s for s in snapshots}
 
         low_statuses = {"low", "out_of_stock"}

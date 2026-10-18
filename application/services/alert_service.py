@@ -47,19 +47,28 @@ class AlertsService:
                     pass
         return Config.NEAR_EXPIRY_WINDOW_DAYS
 
-    def build(self, limit: int = 12) -> list[Alert]:
-        products = list(self.products.list_all(active_only=True))
+    def build(self, limit: int = 12, *, products=None, snapshots=None) -> list[Alert]:
+        """Ranked alerts, most severe first.
+
+        ``products`` / ``snapshots`` may be supplied by a caller that has already
+        read them, so a dashboard renders the same inventory snapshot once instead
+        of once per panel.
+        """
+        if products is None:
+            products = list(self.products.list_all(active_only=True))
         alerts: list[Alert] = []
-        alerts.extend(self._stock_alerts(products))
+        alerts.extend(self._stock_alerts(products, snapshots))
         alerts.extend(self._expiry_alerts(products))
         alerts.extend(self._demand_spike_alerts(products))
         alerts.sort(key=lambda a: _SEVERITY_ORDER.get(a.severity, 9))
         return alerts[:limit]
 
     # ------------------------------------------------------------------ builders
-    def _stock_alerts(self, products) -> list[Alert]:
+    def _stock_alerts(self, products, snapshots=None) -> list[Alert]:
+        if snapshots is None:
+            snapshots = self.inventory.snapshots_for_products(products)
         alerts: list[Alert] = []
-        for snap in self.inventory.snapshots_for_products(products):
+        for snap in snapshots:
             if snap.status == "out_of_stock":
                 alerts.append(Alert(
                     "out_of_stock", "critical", f"{snap.product.name} is out of stock",
@@ -125,8 +134,10 @@ class AlertsService:
 
     def _demand_spike_alerts(self, products) -> list[Alert]:
         alerts: list[Alert] = []
+        # One batched forecast read for every product, instead of one query each.
+        forecasts = self.forecasts.latest_for_products([p.id for p in products])
         for product in products:
-            latest = self.forecasts.latest(product.id)
+            latest = forecasts.get(product.id)
             if latest is None or not latest.points:
                 continue
             recent = self.forecasts.average_daily_demand(product.id)

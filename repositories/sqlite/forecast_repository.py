@@ -141,6 +141,30 @@ class SqliteForecastRepository(SqliteRepository):
             ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_forecasts_for_products(
+        self, product_ids: Sequence[int], conn: sqlite3.Connection | None = None
+    ) -> dict[int, list[dict]]:
+        """Every stored forecast for many products in one round trip.
+
+        Views that render a dashboard used to call :meth:`get_forecasts` once per
+        product; this collapses that into a single query. Products with no stored
+        forecast are simply absent from the mapping.
+        """
+        ids = [int(product_id) for product_id in product_ids]
+        if not ids:
+            return {}
+        placeholders = ",".join("?" for _ in ids)
+        sql = (
+            f"SELECT * FROM forecasts WHERE product_id IN ({placeholders}) "
+            "ORDER BY product_id, target_date"
+        )
+        with self._conn(conn) as c:
+            rows = c.execute(sql, tuple(ids)).fetchall()
+        grouped: dict[int, list[dict]] = {}
+        for row in rows:
+            grouped.setdefault(int(row["product_id"]), []).append(dict(row))
+        return grouped
+
     def latest_forecast_meta(self, product_id: int, conn: sqlite3.Connection | None = None) -> Optional[dict]:
         with self._conn(conn) as c:
             row = c.execute(

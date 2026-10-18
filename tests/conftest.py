@@ -60,14 +60,16 @@ def ctx(tmp_path):
     product_service = ProductService(products, audit)
     supplier_service = SupplierService(suppliers, products, audit)
     inventory_service = InventoryService(db, inventory_repo, products, audit, supplier_service)
-    sales_service = SalesService(db, sales_repo, products, inventory_service, audit)
+    forecast_service = ForecastService(db, forecast_repo, products, settings)
+    model_service = ModelService(model_dir=tmp_path / "models")
+    forecast_service.model_service = model_service
+    sales_service = SalesService(
+        db, sales_repo, products, inventory_service, audit, forecast_service
+    )
     import_export_service = ImportExportService(
         products, sales_repo, product_service, inventory_service,
         sales_service, supplier_service, audit,
     )
-    forecast_service = ForecastService(db, forecast_repo, products, settings)
-    model_service = ModelService(model_dir=tmp_path / "models")
-    forecast_service.model_service = model_service
     reorder_service = ReorderService(
         db, forecast_service, inventory_service, products, suppliers,
         purchase_orders, reorder_repo, settings, audit,

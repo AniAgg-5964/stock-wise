@@ -56,7 +56,14 @@ _STATUS_LABELS = {
 
 def build_dashboard_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Control:
     app = app_context
-    stats = app.dashboard_service.stats()
+
+    # Read the product list, inventory snapshot and stored forecasts ONCE and share
+    # them across the panels. Each was previously rebuilt per panel, which is what
+    # made this screen take seconds to render.
+    products = list(app.product_service.list_products(active_only=True))
+    snapshots = list(app.inventory_service.snapshots_for_products(products))
+    forecasts = app.forecast_service.latest_for_products([p.id for p in products])
+    stats = app.dashboard_service.stats(products=products, snapshots=snapshots)
 
     today = date.today()
     range_label = f"{(today - timedelta(days=13)).strftime('%d %b')} \u2013 {today.strftime('%d %b, %Y')}"
@@ -104,12 +111,14 @@ def build_dashboard_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
         header,
         kpis,
         panel_grid([
-            (_sales_vs_forecast_panel(app), 7),
-            (_top_products_panel(app, navigate), 5),
+            (_sales_vs_forecast_panel(forecasts), 7),
+            (_top_products_panel(products, snapshots, forecasts), 5),
         ]),
         _quick_actions(navigate),
         panel_grid([
-            (_alerts_panel(app.alert_service.build(), navigate), 6),
+            (_alerts_panel(
+                app.alert_service.build(products=products, snapshots=snapshots), navigate,
+            ), 6),
             (_activity_panel(stats), 6),
         ]),
     ])
@@ -176,18 +185,17 @@ def _activity_panel(stats) -> ft.Control:
     return section("Recent Stock Activity", content, subtitle="Latest ledger entries")
 
 
-def _sales_vs_forecast_panel(app) -> ft.Control:
+def _sales_vs_forecast_panel(forecasts) -> ft.Control:
     today = date.today()
     start = (today - timedelta(days=13)).isoformat()
-    history = app.forecast_repo.total_demand_by_date(start, today.isoformat())
+    history = app_context.forecast_repo.total_demand_by_date(start, today.isoformat())
     hist_values = [q for _, q in history]
     hist_labels = [_day_label(d) for d, _ in history]
 
     # Aggregate the next 7 days of stored forecasts across products.
     by_date: dict[str, float] = {}
     upper_by_date: dict[str, float] = {}
-    for product in app.product_service.list_products(active_only=True):
-        latest = app.forecast_service.latest(product.id)
+    for latest in forecasts.values():
         if latest is None:
             continue
         for point in latest.points[:7]:
@@ -234,18 +242,14 @@ def _sales_vs_forecast_panel(app) -> ft.Control:
     return section("Sales vs Forecast", content, subtitle="Units per day \u00b7 last 14 days and next 7")
 
 
-def _top_products_panel(app, navigate: Callable[[str], None]) -> ft.Control:
-    products = list(app.product_service.list_products(active_only=True))
+def _top_products_panel(products, snapshots, forecasts) -> ft.Control:
     status_by_id = {}
-    try:
-        for snap in app.inventory_service.snapshots_for_products(products):
-            status_by_id[snap.product.id] = snap.status
-    except Exception:  # pragma: no cover - defensive
-        status_by_id = {}
+    for snap in snapshots:
+        status_by_id[snap.product.id] = snap.status
 
     ranked: list[tuple[str, float, str]] = []
     for product in products:
-        latest = app.forecast_service.latest(product.id)
+        latest = forecasts.get(product.id)
         if latest is None or not latest.points:
             continue
         total = sum(p.predicted_qty for p in latest.points[:7])

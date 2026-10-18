@@ -50,6 +50,11 @@ class _StubForecast:
     def latest(self, product_id):
         return self._latest.get(product_id)
 
+    def latest_for_products(self, product_ids):
+        return {
+            pid: self._latest[pid] for pid in product_ids if pid in self._latest
+        }
+
     def average_daily_demand(self, product_id, window=28):
         return self._averages.get(product_id, 0.0)
 

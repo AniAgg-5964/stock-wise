@@ -26,12 +26,16 @@ from domain.policies import StockPolicy
 
 
 class SalesService:
-    def __init__(self, db, sales_repo, product_repo, inventory_service, audit_repo) -> None:
+    def __init__(self, db, sales_repo, product_repo, inventory_service, audit_repo,
+                 forecast_service=None) -> None:
         self.db = db
         self.sales = sales_repo
         self.products = product_repo
         self.inventory = inventory_service
         self.audit = audit_repo
+        # Optional: lets a recorded sale drop the forecast service's memoised
+        # demand reads, so forecasts and reorder figures never lag a real sale.
+        self.forecasts = forecast_service
 
     # ------------------------------------------------------------------ writes
     def record_sale(self, sale: Sale, *, allow_override: bool = False, actor: str = "system") -> Sale:
@@ -129,6 +133,14 @@ class SalesService:
 
         sale.id = header.id
         sale.created_at = header.created_at
+
+        # Committed, so now the memoised demand reads for the affected products
+        # are stale: drop them or the next forecast/alerts view shows pre-sale
+        # numbers. Done after the transaction so a rollback cannot clear a cache
+        # that was still valid.
+        if self.forecasts is not None:
+            for product_id in demand_by_product:
+                self.forecasts.invalidate_demand_cache(product_id)
         return sale
 
     # ------------------------------------------------------------------- reads

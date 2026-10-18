@@ -11,6 +11,7 @@ Forecasting never mutates stock and never raises for missing data \u2014 it retu
 from __future__ import annotations
 
 from datetime import date, timedelta
+from typing import Iterable
 
 from app.config import Config
 from application.dto import ForecastMetrics, ForecastPoint, ForecastResult
@@ -37,6 +38,31 @@ class ForecastService:
         self.products = product_repo
         self.settings = settings_repo
         self.model_service = model_service
+        # Memoised demand-history reads. These are pure functions of the
+        # `daily_demand` table, so caching them is safe *provided* the cache is
+        # dropped when a sale changes that table. See `invalidate_demand_cache`.
+        self._series_cache: dict[tuple[int, str, bool], list[DayPoint]] = {}
+        self._backtest_cache: dict[tuple[int, int, str], list[ForecastMetrics]] = {}
+
+    def invalidate_demand_cache(self, product_id: int | None = None) -> None:
+        """Forget memoised demand reads because the history has changed.
+
+        Recording a sale appends to ``daily_demand``; every forecast, alert and
+        reorder figure that depends on it must reflect that immediately. Called by
+        the sales service with the affected products, or with no argument after a
+        bulk import or seed run.
+
+        Stored forecasts are deliberately **not** cached, so a regenerated forecast
+        is always visible without invalidation.
+        """
+        if product_id is None:
+            self._series_cache.clear()
+            self._backtest_cache.clear()
+            return
+        for key in [k for k in self._series_cache if k[0] == product_id]:
+            del self._series_cache[key]
+        for key in [k for k in self._backtest_cache if k[0] == product_id]:
+            del self._backtest_cache[key]
 
     # ------------------------------------------------------------------- config
     def _horizon(self, override: int | None = None) -> int:
@@ -101,13 +127,25 @@ class ForecastService:
         ``impute=True`` replaces censored (out-of-stock) days with an estimate of
         true demand \u2014 used by the ML pipeline so a stockout is not learned as a
         real drop in demand. The default returns the raw observed series.
+
+        Memoised, because rebuilding the grid meant re-reading the whole demand
+        history and one dashboard render used to ask for this ~160 times. The
+        result is a pure function of ``daily_demand``, so it is cleared by
+        :meth:`invalidate_demand_cache` whenever a sale is recorded.
         """
         end = end or date.today().isoformat()
+        cache_key = (int(product_id), end, bool(impute))
+        cached = self._series_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         history = self.forecasts.get_demand_history_full(product_id)
         points = [(row[0], row[1]) for row in history]
         stockouts = {row[0] for row in history if row[2]}
         series = to_daily_series(points, end=end, stockout_dates=stockouts)
-        return impute_censored(series) if impute else series
+        result = impute_censored(series) if impute else series
+        self._series_cache[cache_key] = result
+        return result
 
     def average_daily_demand(self, product_id: int, *, window: int = 28) -> float:
         return recent_average(self.demand_series(product_id), window)
@@ -230,16 +268,42 @@ class ForecastService:
 
     # ------------------------------------------------------------ forecast reads
     def latest(self, product_id: int) -> ForecastResult | None:
-        """Read the most recently stored forecast (no recomputation)."""
-        rows = self.forecasts.get_forecasts(product_id)
-        if not rows:
-            return None
+        """Read the most recently stored forecast (no recomputation).
+
+        The stored rows are re-read on every call, so a regenerated forecast shows
+        up immediately. Everything derived from demand history comes from the
+        memoised series, so this is cheap enough to call in a loop.
+        """
+        return self.latest_for_products([product_id]).get(int(product_id))
+
+    def latest_for_products(self, product_ids: Iterable[int]) -> dict[int, ForecastResult]:
+        """Stored forecasts for many products in one pass.
+
+        A dashboard needs this for every product at once; doing it one at a time
+        re-ran the same history rebuild dozens of times per render.
+        """
+        ids = sorted({int(product_id) for product_id in product_ids})
+        if not ids:
+            return {}
+        rows_by_product = self.forecasts.get_forecasts_for_products(ids)
+        results: dict[int, ForecastResult] = {}
+        for product_id in ids:
+            rows = rows_by_product.get(product_id)
+            if not rows:
+                continue
+            results[product_id] = self._result_from_rows(product_id, rows)
+        return results
+
+    def _result_from_rows(self, product_id: int, rows: list[dict]) -> ForecastResult:
         product = self.products.get_by_id(product_id)
         version = rows[0].get("model_version") or "baseline:seasonal_naive"
         method, _, _ = _split_version(version)
         horizon = int(rows[0].get("horizon") or len(rows))
         residual_std = self._residual_std(product_id, horizon, method)
         has_bounds = any(r.get("lower_bound") is not None for r in rows)
+        # One history read, reused for both figures below. Previously this rebuilt
+        # the whole series twice per call on top of the backtest.
+        series = self.demand_series(product_id)
         return ForecastResult(
             product_id=product_id,
             product_name=product.name if product else f"Product #{product_id}",
@@ -249,8 +313,8 @@ class ForecastService:
             generated_at=rows[0].get("generated_at"),
             is_baseline=bool(rows[0].get("fallback_used")),
             fallback_used=bool(rows[0].get("fallback_used")),
-            average_daily_demand=round(self.average_daily_demand(product_id), 3),
-            observed_days=observed_count(self.demand_series(product_id)),
+            average_daily_demand=round(recent_average(series), 3),
+            observed_days=observed_count(series),
             residual_std=round(residual_std, 3),
             interval_level=self._service_level() if has_bounds else None,
             points=[
@@ -277,10 +341,22 @@ class ForecastService:
 
     # ----------------------------------------------------------------- backtest
     def backtest(self, product_id: int, *, horizon: int | None = None) -> list[ForecastMetrics]:
-        """Chronological holdout evaluation of each baseline (PRD 7.6)."""
+        """Chronological holdout evaluation of each baseline (PRD 7.6).
+
+        Memoised: the holdout is a deterministic function of the demand series and
+        the horizon, and this runs inside :meth:`latest` for every product.
+        """
         horizon = horizon or self._horizon()
+        # The series is built as of "today", so the date belongs in the key or the
+        # cache would survive midnight with yesterday's history.
+        cache_key = (int(product_id), int(horizon), date.today().isoformat())
+        cached = self._backtest_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         series = self.demand_series(product_id, impute=True)
         if len(series) < horizon + Config.MIN_TRAINING_DAYS:
+            self._backtest_cache[cache_key] = []
             return []
         train = quantities(series[:-horizon])
         test = quantities(series[-horizon:])
@@ -300,6 +376,7 @@ class ForecastService:
                     n=m["n"],
                 )
             )
+        self._backtest_cache[cache_key] = results
         return results
 
     # -------------------------------------------------------------- model admin

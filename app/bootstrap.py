@@ -68,14 +68,19 @@ def build_context(db: DatabaseConnection) -> SimpleNamespace:
     product_service = ProductService(products, audit)
     supplier_service = SupplierService(suppliers, products, audit)
     inventory_service = InventoryService(db, inventory_repo, products, audit, supplier_service)
-    sales_service = SalesService(db, sales_repo, products, inventory_service, audit)
+    forecast_service = ForecastService(db, forecast_repo, products, settings)
+    model_service = ModelService()
+    forecast_service.model_service = model_service
+    # Built before the sales service: recording a sale changes the demand history
+    # that every forecast, alert and reorder figure is derived from, so the sales
+    # service must be able to drop the forecast service's memoised reads.
+    sales_service = SalesService(
+        db, sales_repo, products, inventory_service, audit, forecast_service
+    )
     import_export_service = ImportExportService(
         products, sales_repo, product_service, inventory_service,
         sales_service, supplier_service, audit,
     )
-    forecast_service = ForecastService(db, forecast_repo, products, settings)
-    model_service = ModelService()
-    forecast_service.model_service = model_service
     reorder_service = ReorderService(
         db, forecast_service, inventory_service, products, suppliers,
         purchase_orders, reorder_repo, settings, audit,
