@@ -23,12 +23,12 @@ def empty_state(
     """Build a centred empty-state panel."""
     children: list[ft.Control] = [
         ft.Container(
-            width=64,
-            height=64,
-            border_radius=32,
+            width=54,
+            height=54,
+            border_radius=T.RADIUS_SMALL,
             bgcolor=T.TINT_HEALTHY if icon == ft.Icons.CHECK_CIRCLE_OUTLINE else T.BG_INPUT,
             alignment=ft.Alignment.CENTER,
-            content=ft.Icon(icon, size=30,
+            content=ft.Icon(icon, size=26,
                             color=T.STATUS_HEALTHY if icon == ft.Icons.CHECK_CIRCLE_OUTLINE
                             else T.TEXT_TERTIARY),
         ),
@@ -36,7 +36,8 @@ def empty_state(
         ft.Text(title, size=T.FONT_SUBTITLE, weight=ft.FontWeight.W_600, color=T.TEXT_PRIMARY,
                 text_align=ft.TextAlign.CENTER),
         ft.Container(height=6),
-        ft.Text(message, size=T.FONT_BODY, color=T.TEXT_SECONDARY, text_align=ft.TextAlign.CENTER),
+        ft.Text(message, size=T.FONT_BODY, color=T.TEXT_SECONDARY,
+                text_align=ft.TextAlign.CENTER, no_wrap=True),
     ]
     if action is not None:
         children += [ft.Container(height=18), action]

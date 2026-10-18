@@ -20,8 +20,8 @@ from domain.money import format_money
 from ui.components.empty_state import empty_state
 from ui.components.feedback import notify, notify_error
 from ui.components.forms import dropdown_field, text_field
-from ui.components.kpi_card import kpi_card
-from ui.components.layout import KPI_COL, kpi_grid, page_header, panel_grid, scroll_column, section
+from ui.components.kpi_card import KpiMetric, kpi_strip
+from ui.components.layout import page_header, panel_grid, scroll_column, section
 from ui.components.status_chip import status_chip
 from ui.components.table import chip_cell, styled_table, text_cell
 
@@ -88,15 +88,15 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
         (Decimal(str(b.quantity_remaining)) * (b.unit_cost or Decimal("0")))
         for b in batches if b.quantity_remaining > 0
     )
-    kpis = kpi_grid([
-        kpi_card("Usable stock", f"{snapshot.usable_stock:g}", subtitle=f"in {product.unit}",
-                 accent=T.STATUS_HEALTHY, col=KPI_COL),
-        kpi_card("On hand (ledger)", f"{snapshot.stock_level:g}", subtitle="physical units",
-                 accent=T.STATUS_INFO, col=KPI_COL),
-        kpi_card("Batches", str(snapshot.batch_count), subtitle="active batches",
-                 accent=T.PRIMARY, col=KPI_COL),
-        kpi_card("Stock value", format_money(stock_value), subtitle="at batch cost",
-                 accent=T.STATUS_WARNING, col=KPI_COL),
+    kpis = kpi_strip([
+        KpiMetric("Usable stock", f"{snapshot.usable_stock:g}", caption=f"in {product.unit}",
+                  accent=T.STATUS_HEALTHY),
+        KpiMetric("On hand (ledger)", f"{snapshot.stock_level:g}", caption="physical units",
+                  accent=T.STATUS_INFO),
+        KpiMetric("Batches", str(snapshot.batch_count), caption="active batches",
+                  accent=T.PRIMARY),
+        KpiMetric("Stock value", format_money(stock_value), caption="at batch cost",
+                  accent=T.STATUS_WARNING),
     ])
 
     details = section(

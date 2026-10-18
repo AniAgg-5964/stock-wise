@@ -18,11 +18,9 @@ from app.theme import StockWiseTheme as T
 from domain.money import format_money
 from ui.components.chart import area_chart, chart_legend
 from ui.components.empty_state import empty_state
-from ui.components.kpi_card import kpi_card
+from ui.components.kpi_card import KpiMetric, kpi_strip
 from ui.components.layout import (
-    KPI_COL,
     icon_tile,
-    kpi_grid,
     list_row,
     page_header,
     panel_grid,
@@ -43,6 +41,20 @@ _MOVEMENT_LABELS = {
 }
 
 _ALERT_STATUS = {"critical": "critical", "warning": "near_expiry", "info": "info"}
+
+# A ledger entry is coloured by what the movement *means*, not by its sign. The
+# old version painted every sale red, which made an ordinary day of trading look
+# like an error screen and left red with no meaning of its own.
+_MOVEMENT_TONE = {
+    "opening_stock": "TEXT_TERTIARY",
+    "purchase_receipt": "STATUS_HEALTHY",
+    "return": "STATUS_HEALTHY",
+    "sale": "TEXT_SECONDARY",
+    "waste": "STATUS_CRITICAL",
+    "adjustment": "STATUS_WARNING",
+    "correction": "STATUS_WARNING",
+    "transfer": "STATUS_INFO",
+}
 
 _STATUS_LABELS = {
     "healthy": "In stock",
@@ -87,24 +99,24 @@ def build_dashboard_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
     )
 
     out_of_stock = stats.out_of_stock_count
-    kpis = kpi_grid([
-        kpi_card("Total Products", str(stats.total_products), icon=ft.Icons.INVENTORY_2_OUTLINED,
-                 accent=T.STATUS_INFO, subtitle="In the catalogue", col=KPI_COL,
-                 on_click=lambda e: navigate("/inventory")),
-        kpi_card("Total Stock Value", format_money(stats.total_stock_value),
-                 icon=ft.Icons.PAYMENTS_OUTLINED, accent=T.STATUS_HEALTHY, col=KPI_COL,
-                 subtitle="At cost", on_click=lambda e: navigate("/inventory")),
-        kpi_card("Out of Stock", str(out_of_stock), icon=ft.Icons.REMOVE_SHOPPING_CART_OUTLINED,
-                 accent=T.STATUS_CRITICAL, col=KPI_COL,
-                 subtitle=(f"{stats.low_stock_count} low stock" if stats.low_stock_count
+    kpis = kpi_strip([
+        KpiMetric("Total Products", str(stats.total_products), icon=ft.Icons.INVENTORY_2_OUTLINED,
+                  accent=T.STATUS_INFO, caption="In the catalogue",
+                  on_click=lambda e: navigate("/inventory")),
+        KpiMetric("Total Stock Value", format_money(stats.total_stock_value),
+                  icon=ft.Icons.PAYMENTS_OUTLINED, accent=T.STATUS_HEALTHY, caption="At cost",
+                  on_click=lambda e: navigate("/inventory")),
+        KpiMetric("Out of Stock", str(out_of_stock), icon=ft.Icons.REMOVE_SHOPPING_CART_OUTLINED,
+                  accent=T.STATUS_CRITICAL,
+                  caption=(f"{stats.low_stock_count} low stock" if stats.low_stock_count
                            else "Requires attention"),
-                 delta_kind="down" if out_of_stock else "muted",
-                 on_click=lambda e: navigate("/inventory")),
-        kpi_card("Expiry Risk", str(stats.near_expiry_count),
-                 icon=ft.Icons.EVENT_BUSY_OUTLINED, accent=T.STATUS_WARNING, col=KPI_COL,
-                 subtitle=f"Within {Config.NEAR_EXPIRY_WINDOW_DAYS} days",
-                 delta_kind="warn" if stats.near_expiry_count else "muted",
-                 on_click=lambda e: navigate("/expiry")),
+                  delta_kind="down" if out_of_stock else "muted",
+                  on_click=lambda e: navigate("/inventory")),
+        KpiMetric("Expiry Risk", str(stats.near_expiry_count),
+                  icon=ft.Icons.EVENT_BUSY_OUTLINED, accent=T.STATUS_WARNING,
+                  caption=f"Within {Config.NEAR_EXPIRY_WINDOW_DAYS} days",
+                  delta_kind="warn" if stats.near_expiry_count else "muted",
+                  on_click=lambda e: navigate("/expiry")),
     ])
 
     return scroll_column([
@@ -125,8 +137,9 @@ def build_dashboard_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
 
 
 def _alerts_panel(alerts, navigate: Callable[[str], None]) -> ft.Control:
+    shown = list(alerts[:6])
     rows: list[ft.Control] = []
-    for alert in alerts[:6]:
+    for i, alert in enumerate(shown):
         status = _ALERT_STATUS.get(alert.severity, "info")
         rows.append(
             list_row(
@@ -139,11 +152,12 @@ def _alerts_panel(alerts, navigate: Callable[[str], None]) -> ft.Control:
                 subtitle=alert.message,
                 trailing=status_chip(alert.severity.title(), status),
                 on_click=lambda e, r=alert.route: navigate(r),
+                divider=i < len(shown) - 1,
             )
         )
 
     content = (
-        ft.Column(spacing=2, controls=rows)
+        ft.Column(spacing=0, controls=rows)
         if rows
         else empty_state("Nothing needs attention",
                          "No low-stock, expiring or rising-demand items right now.",
@@ -156,28 +170,33 @@ def _alerts_panel(alerts, navigate: Callable[[str], None]) -> ft.Control:
 
 
 def _activity_panel(stats) -> ft.Control:
+    shown = list(stats.recent_movements[:6])
     rows: list[ft.Control] = []
-    for product, movement in stats.recent_movements[:6]:
+    for i, (product, movement) in enumerate(shown):
         delta = movement.quantity_delta
         positive = delta >= 0
+        # ``movement_type`` is an enum in the domain but a plain str in some tests
+        # and fixtures, so normalise rather than assume.
+        kind = getattr(movement.movement_type, "value", movement.movement_type)
+        tone = getattr(T, _MOVEMENT_TONE.get(kind, "TEXT_SECONDARY"))
         rows.append(
             list_row(
                 leading=icon_tile(
                     ft.Icons.ARROW_UPWARD if positive else ft.Icons.ARROW_DOWNWARD,
-                    color=T.STATUS_HEALTHY if positive else T.STATUS_CRITICAL,
-                    size=32,
+                    color=tone,
+                    size=30,
                 ),
                 title=product.name,
-                subtitle=f"{_MOVEMENT_LABELS.get(movement.movement_type, movement.movement_type)}"
+                subtitle=f"{_MOVEMENT_LABELS.get(kind, kind)}"
                          f" \u00b7 {movement.occurred_at}",
                 trailing=ft.Text(f"{delta:+g}", size=T.FONT_BODY,
-                                 color=T.STATUS_HEALTHY if positive else T.STATUS_CRITICAL,
-                                 weight=ft.FontWeight.W_600),
+                                 color=tone, weight=ft.FontWeight.W_600),
+                divider=i < len(shown) - 1,
             )
         )
 
     content = (
-        ft.Column(spacing=2, controls=rows)
+        ft.Column(spacing=0, controls=rows)
         if rows
         else empty_state("No stock movements yet", "Receipts, sales and adjustments appear here.",
                          icon=ft.Icons.SWAP_VERT)
@@ -275,12 +294,12 @@ def _top_products_panel(products, snapshots, forecasts) -> ft.Control:
 
 def _quick_actions(navigate: Callable[[str], None]) -> ft.Control:
     def tile(icon: str, title: str, subtitle: str, route: str, accent: str) -> ft.Control:
+        # No border and no fill: a quick action is a target, not a surface. The
+        # ink ripple is the hover feedback, which is all it needs to read as
+        # clickable.
         return ft.Container(
             expand=True,
-            padding=ft.Padding.symmetric(horizontal=14, vertical=12),
-            border_radius=T.RADIUS_SMALL,
-            bgcolor=T.BG_HOVER,
-            border=ft.Border.all(1, T.BORDER_SUBTLE),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=10),
             ink=True,
             on_click=lambda e: navigate(route),
             content=ft.Row(

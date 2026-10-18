@@ -100,7 +100,8 @@ than assuming older 0.x APIs. Specifics already hit:
 - React to enum values with `.value`, never `str(enum)` (which yields `"MovementType.SALE"`).
 - `ft.Row(wrap=True)` makes the whole row (and everything under it) render as a blank grey
   block in 1.0.4 — never use it. Use `ft.ResponsiveRow` instead; `ui/components/layout.py`
-  provides `flow_row(...)`, `kpi_grid(...)` and `panel_grid(...)` for wrapping layouts.
+  provides `flow_row(...)`, `panel_grid(...)` and `hairline(...)` for wrapping layouts;
+  headline metrics use `ui/components/kpi_card.py`'s `kpi_strip(...)`.
 - `ft.DataCell` content is laid out with unbounded width: a stretchy `ft.Row` or a bare
   `ft.Column` inside a cell makes the entire `DataTable` render blank. Wrap cell content in a
   `tight=True` Row — use `ui/components/table.py`'s `entity_cell(...)` for name/subtitle cells.
@@ -121,15 +122,41 @@ than assuming older 0.x APIs. Specifics already hit:
   at every column), and keep `_MAX_SLICES` bounded — each slice is ~3 Flutter controls
   and the chart is rebuilt on every dashboard render.
 
+## Surface discipline (the app's core UI rule)
+
+These are not style preferences — they are what stops the UI reading as a pile of
+boxes, which is what the user called out as "unprofessional":
+
+1. **One surface per region.** `layout.card(...)` is the only surface. Inside it,
+   group with whitespace, `layout.hairline(...)` or type scale — never with
+   another filled, bordered or rounded box.
+2. **Never two edges.** A card has a hairline border **or** a shadow, never both,
+   and its contents have neither. `T.shadow()` returns `None` in light mode for
+   exactly this reason (dark mode needs it to separate from a near-black page).
+   A `styled_table` inside a card has no border and no radius of its own.
+3. **Sharp radii.** Cards 8, small blocks and inputs 6, true pill only on status
+   chips. Large values mean "toy", not "friendly".
+4. **Rows are rows.** Alert and ledger entries are flat rows with hairline
+   separators (`list_row(..., divider=True)`), not one tinted box each.
+
+Measured effect: card shadows went from 5–9 per screen to 0; surface counts on
+Inventory 5→2, Expiry 6→3, Reorder 6→3.
+
 ## Layout budgets (measured, not guessed)
 
-- A 4-up KPI row on the smallest supported window (1366px) leaves **208px** of text
-  width per card: `1366 - sidebar 248 - 2*content padding 28 - 3*grid gap 18 - 2*card
-  padding 22`. The KPI icon deliberately sits on the *label* row rather than beside
-  the number, because with a 40px tile beside it only ~156px remained and no display
-  size could fit `₹1,23,456.00`. `kpi_card.value_fits()` guards this; the sizing
-  ladder in `_value_size` is what keeps money on one line (the card is `no_wrap`, so
-  an over-long value is clipped, never wrapped).
+- A four-across KPI **strip** on a 1240px window leaves **164px** of text width per
+  metric: `(1240 - sidebar 248 - 2*content padding 28 - 3*gap 18) / 4 = 200`, less
+  strip padding 2×18 and cell padding 2×10. `kpi_card.value_fits()` guards this and
+  the ladder in `_value_size` is what keeps `₹1,23,456.00` on one line (metrics are
+  `no_wrap`, so an over-long value is clipped, never wrapped).
+- `KPI_BREAKPOINTS["lg"]` is **1240** and must stay at or below 1280. It used to be
+  1300 while its own comment recorded that four across needs ~1280px, so every
+  1280-class window missed the four-across threshold and rendered two enormous
+  half-empty tiles. Below the threshold the strip falls into a deliberate 2×2 panel,
+  which is safe; that is why the fallback no longer needs to be avoided.
+- No content max-width yet: `T.MAX_CONTENT_WIDTH` is defined but unused, because
+  Flet 1.0 exposes no `ConstrainedBox` and `main.py` has no `on_resize` hook. On a
+  1920px monitor the cards still stretch. Adding a resize hook is the fix.
 
 
 ## Gotchas

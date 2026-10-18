@@ -4,26 +4,35 @@ Single source of truth for the look and feel: colours, spacing, radii, typograph
 and status semantics. UI code imports ``StockWiseTheme as T`` and never hard-codes
 raw hex values.
 
-**Look and feel.** The app is for a neighbourhood shopkeeper, so the palette is
-warm rather than clinical: a deep forest green for the brand, a cream page, and a
-yellow accent used sparingly. Green signals *fresh stock, all good*; the cream
-background keeps long reading sessions easy on the eyes. Every status colour is
-warm-shifted to match instead of sitting on top of the warm ground as pure hues.
+**Look and feel.** Warm rather than clinical: a deep forest green for the brand, a
+cream page, and a yellow accent used sparingly.
 
-Two palettes are maintained — **light** (default) and **dark**. ``T.apply("dark")``
-switches the active palette in place; every view reads ``T.*`` at build time, so a
-re-render picks up the change. Token *names* never change between palettes.
+**Surface discipline** (the rules the whole UI is built on):
+
+1. One surface per region. A card is the *only* surface; anything inside it is
+   grouped with whitespace, a hairline rule, or type scale — never with another
+   filled, bordered or rounded box.
+2. Never two edges. A card gets a hairline border **or** a shadow, never both, and
+   its contents get neither. A table inside a card has no border of its own.
+3. Sharp radii. Cards 8, small blocks and inputs 6, and a true pill only on status
+   chips, where the shape is a convention people read instantly.
+
+That is why ``shadow()`` returns ``None`` in light mode. The hairline border *is*
+the edge; a second edge is what made the app read as a pile of tiles.
 
 Colour semantics: red = urgent, amber = warning, green = healthy, neutral = normal
-information. Colour is always paired with a text label.
+information. Colour is always paired with a text label. The ledger uses neutral
+rather than red for ordinary sales — red has to mean something.
 
-**Fonts.** ``Mukta`` (SIL Open Font License, bundled in ``assets/fonts``) is
-loaded through ``page.fonts``. It was chosen because it covers both Latin and
-Devanagari in one family, so English and Hindi need no fallback chain, and it
-stays legible at the small sizes a dense data table needs. Flet 1.0 only supports
-*static* font files, so the two weights are registered as two family names;
-``FONT_FAMILY_BOLD`` is applied to large display text where synthetic bold would
-otherwise look thin.
+Two palettes are maintained, **light** (default) and **dark**. ``T.apply("dark")``
+switches in place; every view reads ``T.*`` at build time, so a re-render picks the
+change up. Token *names* never change between palettes.
+
+**Fonts.** ``Mukta`` (SIL Open Font License, bundled in ``assets/fonts``) covers
+both Latin and Devanagari in one family, so English and Hindi need no fallback
+chain. Flet 1.0 supports only *static* fonts, so the two weights are registered as
+two family names; ``FONT_FAMILY_BOLD`` is used for large display text where
+synthetic bold would look thin.
 """
 
 from __future__ import annotations
@@ -34,96 +43,100 @@ import flet as ft
 class StockWiseTheme:
     # ------------------------------------------------------------------ palettes
     _LIGHT: dict[str, str] = {
-        # Surfaces — warm, slightly creamy rather than clinical grey
-        "PAGE_BG": "#F7F5EF",
-        "BG_DARKEST": "#14261E",
-        "BG_DARK": "#14261E",
+        # Surfaces — warm cream rather than clinical grey. The page sits a step
+        # below the cards so the cards read as raised without needing a shadow.
+        "PAGE_BG": "#F5F3ED",
+        "BG_DARKEST": "#15201A",
+        "BG_DARK": "#15201A",
         "BG_CARD": "#FFFFFF",
-        "BG_INPUT": "#F2EFE7",
-        "BG_HOVER": "#FAF8F2",
-        "BORDER": "#E7E2D6",
-        "BORDER_SUBTLE": "#F0ECE2",
+        "BG_INPUT": "#F3F1EA",
+        "BG_HOVER": "#F8F6F1",
+        # Hairlines. BORDER is the card edge and must be visible at 1px on cream;
+        # BORDER_SUBTLE is only ever used *inside* a card.
+        "BORDER": "#DCD6C8",
+        "BORDER_SUBTLE": "#EBE7DC",
         # Brand — deep forest green
-        "PRIMARY": "#0B6B3A",
-        "PRIMARY_HOVER": "#085530",
-        "PRIMARY_SUBTLE": "#E4F0E8",
-        "PRIMARY_TINT": "#EAF4EE",
+        "PRIMARY": "#0C5C36",
+        "PRIMARY_HOVER": "#094A2B",
+        "PRIMARY_SUBTLE": "#DCE9E1",
+        "PRIMARY_TINT": "#E9F1EC",
         # Accent — warm yellow, used sparingly (badges, highlights, never body text)
-        "ACCENT": "#F2B035",
-        "ACCENT_TEXT": "#8A5A00",
-        "TINT_ACCENT": "#FCF2DC",
-        # Text
-        "TEXT_PRIMARY": "#14261E",
-        "TEXT_SECONDARY": "#5D6B62",
-        "TEXT_TERTIARY": "#93A099",
+        "ACCENT": "#DE9A2E",
+        "ACCENT_TEXT": "#7A5100",
+        "TINT_ACCENT": "#FAEFD6",
+        # Text. Secondary and tertiary were darkened so long readings hold up:
+        # the old values were too close to the cream background.
+        "TEXT_PRIMARY": "#15201A",
+        "TEXT_SECONDARY": "#55625A",
+        "TEXT_TERTIARY": "#7C8A81",
         "TEXT_ON_PRIMARY": "#FFFFFF",
         # Status
-        "STATUS_HEALTHY": "#1E8E4E",
-        "STATUS_WARNING": "#D98324",
-        "STATUS_CRITICAL": "#C6372D",
-        "STATUS_INFO": "#1F6F8B",
-        "STATUS_NEUTRAL": "#6B7A72",
+        "STATUS_HEALTHY": "#1B7F45",
+        "STATUS_WARNING": "#C8741C",
+        "STATUS_CRITICAL": "#BC2F26",
+        "STATUS_INFO": "#1C657F",
+        "STATUS_NEUTRAL": "#64726A",
         # Pastel status tints (chip / tile backgrounds)
-        "TINT_HEALTHY": "#E6F3EA",
-        "TINT_WARNING": "#FCF0E0",
-        "TINT_CRITICAL": "#FBE9E7",
-        "TINT_INFO": "#E7F1F5",
-        "TINT_NEUTRAL": "#F0EEE8",
-        # Sidebar — deep green, the one place the brand colour goes full strength
-        "SIDEBAR_BG": "#0A4F2E",
-        "SIDEBAR_TEXT": "#A8CDB6",
+        "TINT_HEALTHY": "#E4F1E8",
+        "TINT_WARNING": "#FBEEDD",
+        "TINT_CRITICAL": "#FAE6E4",
+        "TINT_INFO": "#E4EEF2",
+        "TINT_NEUTRAL": "#EEECE5",
+        # Sidebar — deep green, the one place the brand colour runs full strength
+        "SIDEBAR_BG": "#0A4A2B",
+        "SIDEBAR_TEXT": "#A9CDB8",
         "SIDEBAR_TEXT_ACTIVE": "#FFFFFF",
-        "SIDEBAR_ACTIVE_BG": "#157A4A",
-        "SIDEBAR_HOVER_BG": "#0E5D39",
-        "SIDEBAR_BORDER": "#0E5D39",
-        "SIDEBAR_MUTED": "#86B79D",
-        "SIDEBAR_CARD_BG": "#0E5D39",
+        "SIDEBAR_ACTIVE_BG": "#13733F",
+        "SIDEBAR_HOVER_BG": "#0D5733",
+        "SIDEBAR_BORDER": "#0D5733",
+        "SIDEBAR_MUTED": "#7FB193",
+        "SIDEBAR_CARD_BG": "#0D5733",
         # Top bar
         "TOPBAR_BG": "#FFFFFF",
-        "TOPBAR_BORDER": "#EDE8DC",
-        "SHADOW": "#14261E14",
+        "TOPBAR_BORDER": "#DCD6C8",
+        "SHADOW": "#15201A14",
     }
 
     _DARK: dict[str, str] = {
-        "PAGE_BG": "#0E1512",
-        "BG_DARKEST": "#0A100D",
-        "BG_DARK": "#131C17",
-        "BG_CARD": "#16211B",
-        "BG_INPUT": "#1D2A22",
-        "BG_HOVER": "#1E2C24",
-        "BORDER": "#26362C",
-        "BORDER_SUBTLE": "#1F2C25",
-        "PRIMARY": "#35C46F",
-        "PRIMARY_HOVER": "#46D67F",
-        "PRIMARY_SUBTLE": "#173A26",
-        "PRIMARY_TINT": "#1A3325",
-        "ACCENT": "#F5C242",
-        "ACCENT_TEXT": "#F5C242",
-        "TINT_ACCENT": "#3A2F14",
-        "TEXT_PRIMARY": "#E8EFEA",
-        "TEXT_SECONDARY": "#A3B3A9",
-        "TEXT_TERTIARY": "#6E7F75",
-        "TEXT_ON_PRIMARY": "#0A100D",
-        "STATUS_HEALTHY": "#35C46F",
-        "STATUS_WARNING": "#E9A23B",
-        "STATUS_CRITICAL": "#E8695C",
-        "STATUS_INFO": "#5AA9C4",
-        "STATUS_NEUTRAL": "#6E7F75",
+        "PAGE_BG": "#0C120F",
+        "BG_DARKEST": "#080C0A",
+        "BG_DARK": "#111815",
+        "BG_CARD": "#17201B",
+        "BG_INPUT": "#1E2721",
+        "BG_HOVER": "#1F2A23",
+        "BORDER": "#2C3931",
+        "BORDER_SUBTLE": "#222D27",
+        "PRIMARY": "#3FCB7C",
+        "PRIMARY_HOVER": "#54D98C",
+        "PRIMARY_SUBTLE": "#16351F",
+        "PRIMARY_TINT": "#18301F",
+        "ACCENT": "#E8B04A",
+        "ACCENT_TEXT": "#E8B04A",
+        "TINT_ACCENT": "#362B12",
+        "TEXT_PRIMARY": "#EAF1EC",
+        "TEXT_SECONDARY": "#AAB9B0",
+        "TEXT_TERTIARY": "#78887F",
+        "TEXT_ON_PRIMARY": "#08110C",
+        "STATUS_HEALTHY": "#3FCB7C",
+        "STATUS_WARNING": "#DF9A38",
+        "STATUS_CRITICAL": "#E26A5E",
+        "STATUS_INFO": "#5BA6C1",
+        "STATUS_NEUTRAL": "#78887F",
         "TINT_HEALTHY": "#15301F",
-        "TINT_WARNING": "#33260F",
-        "TINT_CRITICAL": "#33191A",
-        "TINT_INFO": "#152C36",
-        "TINT_NEUTRAL": "#1F2C25",
-        "SIDEBAR_BG": "#0A100D",
-        "SIDEBAR_TEXT": "#7FA892",
+        "TINT_WARNING": "#31230E",
+        "TINT_CRITICAL": "#331819",
+        "TINT_INFO": "#142B34",
+        "TINT_NEUTRAL": "#1E2721",
+        "SIDEBAR_BG": "#080C0A",
+        "SIDEBAR_TEXT": "#84AC95",
         "SIDEBAR_TEXT_ACTIVE": "#FFFFFF",
-        "SIDEBAR_ACTIVE_BG": "#17402A",
-        "SIDEBAR_HOVER_BG": "#12291D",
-        "SIDEBAR_BORDER": "#142B1F",
-        "SIDEBAR_MUTED": "#5E8570",
-        "SIDEBAR_CARD_BG": "#12291D",
-        "TOPBAR_BG": "#0E1512",
-        "TOPBAR_BORDER": "#1F2C25",
+        "SIDEBAR_ACTIVE_BG": "#123C24",
+        "SIDEBAR_HOVER_BG": "#0F2819",
+        "SIDEBAR_BORDER": "#14291C",
+        "SIDEBAR_MUTED": "#5D8269",
+        "SIDEBAR_CARD_BG": "#0F2819",
+        "TOPBAR_BG": "#0C120F",
+        "TOPBAR_BORDER": "#222D27",
         "SHADOW": "#00000000",
     }
 
@@ -141,27 +154,32 @@ class StockWiseTheme:
         "Mukta SemiBold": "/fonts/Mukta-SemiBold.ttf",
     }
 
-    # Spacing / radii — roomier than a typical admin dashboard
+    # Spacing / radii. Radii are deliberately small — see the surface rules above.
     CONTENT_PADDING = 28
-    CARD_PADDING = 22
+    CARD_PADDING = 20
     GAP = 18
     GAP_SMALL = 10
     GAP_TINY = 6
-    RADIUS = 18
-    RADIUS_SMALL = 12
-    INPUT_RADIUS = 12
-    CHIP_RADIUS = 12  # pill: the chip is ~22px tall, so this is effectively round
+    RADIUS = 8
+    RADIUS_SMALL = 6
+    INPUT_RADIUS = 6
+    CHIP_RADIUS = 14  # pill: the chip is ~26px tall, so this is effectively round
     SIDEBAR_WIDTH = 248
     SIDEBAR_WIDTH_COLLAPSED = 80
     TOPBAR_HEIGHT = 68
 
-    # Typography (px) — larger than before: the old 11px micro-labels were the
-    # single biggest reason the app read as cramped and hard to scan.
-    FONT_HERO = 30
-    FONT_DISPLAY = 32
-    FONT_TITLE = 24
-    FONT_SUBTITLE = 17
-    FONT_BODY = 15
+    #: Beyond this the content stops stretching. Without it a wide monitor turns
+    #: every card into a wide empty band.
+    MAX_CONTENT_WIDTH = 1560
+
+    # Typography (px). The metric size is separate from FONT_DISPLAY because the
+    # KPI strip packs four of them across and has to stay dense.
+    FONT_HERO = 26
+    FONT_DISPLAY = 28
+    FONT_METRIC = 28
+    FONT_TITLE = 22
+    FONT_SUBTITLE = 16
+    FONT_BODY = 14
     FONT_SMALL = 13
     FONT_TINY = 12
 
@@ -204,6 +222,10 @@ class StockWiseTheme:
             "info": cls.STATUS_INFO,
             "neutral": cls.STATUS_NEUTRAL,
             "missing": cls.STATUS_NEUTRAL,
+            # A completed sale is normal information, not a failure. Showing it
+            # in red made the whole ledger look like an error screen.
+            "sale": cls.STATUS_NEUTRAL,
+            "purchase": cls.STATUS_NEUTRAL,
         }
         return mapping.get(status.lower(), cls.STATUS_INFO)
 
@@ -225,31 +247,28 @@ class StockWiseTheme:
             "info": cls.TINT_INFO,
             "neutral": cls.TINT_NEUTRAL,
             "missing": cls.TINT_NEUTRAL,
+            "sale": cls.TINT_NEUTRAL,
+            "purchase": cls.TINT_NEUTRAL,
         }
         return mapping.get(status.lower(), cls.TINT_INFO)
 
     @classmethod
     def shadow(cls) -> list[ft.BoxShadow] | None:
-        """A soft, warm card shadow (a no-op in dark mode).
+        """``None`` in light mode: the hairline border is the card edge.
 
-        Wider blur and a warmer tint than a neutral grey shadow: on a cream page
-        a grey shadow reads as dirt.
+        A shadow *and* a border is two edges, which is what made the app read as
+        a stack of tiles. Dark mode is the exception — against a near-black page a
+        border alone does not separate a surface, so a single soft shadow carries
+        the elevation instead.
         """
-        if cls.is_dark():
-            return [
-                ft.BoxShadow(
-                    blur_radius=24,
-                    spread_radius=0,
-                    color=ft.Colors.with_opacity(0.30, "#000000"),
-                    offset=ft.Offset(0, 6),
-                )
-            ]
+        if not cls.is_dark():
+            return None
         return [
             ft.BoxShadow(
-                blur_radius=24,
+                blur_radius=14,
                 spread_radius=0,
-                color=cls.SHADOW,
-                offset=ft.Offset(0, 6),
+                color=ft.Colors.with_opacity(0.32, "#000000"),
+                offset=ft.Offset(0, 3),
             )
         ]
 

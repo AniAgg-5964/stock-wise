@@ -1,6 +1,9 @@
 """StockWise — layout helpers (page headers, cards, sections).
 
-Keeps spacing/typography consistent across views without repeating styling code.
+Keeps spacing and typography consistent across views without repeating styling
+code, and owns the app's surface rules: ``card`` is the only surface, it carries a
+hairline border and no shadow, and its contents group with ``hairline`` or plain
+whitespace rather than with another filled, bordered or rounded box.
 """
 
 from __future__ import annotations
@@ -49,8 +52,13 @@ def card(
     expand: bool = False,
     width: int | None = None,
     bgcolor: str | None = None,
+    radius: int | None = None,
 ) -> ft.Control:
-    """A themed surface card (white in light mode) with a soft shadow.
+    """The one surface in the app: a card with a hairline border and no shadow.
+
+    Two edges (a border *and* a shadow) is what made the old UI read as a pile of
+    tiles, so the border carries the edge alone. Nothing inside a card should
+    draw its own border, fill or radius — group with whitespace or ``hairline``.
 
     ``bgcolor`` exists for the rare card that should read as a callout (a hero or
     an impact panel) rather than as ordinary content.
@@ -59,11 +67,23 @@ def card(
         content=content,
         padding=padding if padding is not None else T.CARD_PADDING,
         bgcolor=bgcolor or T.BG_CARD,
-        border_radius=T.RADIUS,
-        border=ft.Border.all(1, T.BORDER_SUBTLE),
-        shadow=T.shadow(),
+        border_radius=radius if radius is not None else T.RADIUS,
+        border=ft.Border.all(1, T.BORDER),
         expand=expand,
         width=width,
+    )
+
+
+def hairline(*, inset: int = 0) -> ft.Control:
+    """A 1px rule for grouping content *inside* a card.
+
+    Preferred over wrapping the group in another box, which is how the app ended
+    up with nine competing surfaces on the dashboard.
+    """
+    return ft.Container(
+        height=1,
+        bgcolor=T.BORDER_SUBTLE,
+        margin=ft.Margin.symmetric(horizontal=inset),
     )
 
 
@@ -117,8 +137,8 @@ def section(
         return card(body, expand=expand)
     return ft.Container(
         content=body, height=height, padding=T.CARD_PADDING, bgcolor=T.BG_CARD,
-        border_radius=T.RADIUS, border=ft.Border.all(1, T.BORDER_SUBTLE),
-        shadow=T.shadow(), expand=expand,
+        border_radius=T.RADIUS, border=ft.Border.all(1, T.BORDER),
+        expand=expand,
     )
 
 
@@ -129,18 +149,20 @@ def list_row(
     subtitle: Optional[str] = None,
     trailing: Optional[ft.Control] = None,
     on_click: Optional[Callable] = None,
+    divider: bool = False,
 ) -> ft.Control:
-    """A padded, hover-highlighted row used by alert / activity lists.
+    """A flat row for alert / activity lists.
 
-    Rows are the app's most-clicked element, so they carry a little more vertical
-    breathing room than the old 9px and give the label a proper two-line stack.
+    Rows used to each be a filled, rounded box stacked inside a card — six boxes
+    in one panel, none of them important. A row is a row: no fill, no radius, and
+    a hairline separating it from the next. ``divider`` draws that rule.
     """
     controls: list[ft.Control] = []
     if leading is not None:
         controls.append(leading)
     controls.append(
         ft.Column(
-            spacing=2,
+            spacing=1,
             expand=True,
             controls=[
                 ft.Text(title, size=T.FONT_BODY, color=T.TEXT_PRIMARY, weight=ft.FontWeight.W_500),
@@ -151,9 +173,13 @@ def list_row(
     if trailing is not None:
         controls.append(trailing)
     return ft.Container(
-        padding=ft.Padding.symmetric(horizontal=12, vertical=11),
-        border_radius=T.RADIUS_SMALL,
-        bgcolor=T.BG_HOVER if on_click is not None else None,
+        padding=ft.Padding.only(
+            left=10, right=4, top=10, bottom=0 if divider else 10
+        ),
+        border=(
+            ft.Border.only(bottom=ft.BorderSide(1, T.BORDER_SUBTLE))
+            if divider else None
+        ),
         ink=on_click is not None,
         on_click=on_click,
         content=ft.Row(spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=controls),
@@ -177,23 +203,9 @@ def scroll_column(controls: list[ft.Control], *, spacing: int = T.GAP) -> ft.Col
     return ft.Column(controls=controls, spacing=spacing, scroll=ft.ScrollMode.AUTO, expand=True)
 
 
-# KPI cards reflow to fit narrow windows: 1 per row, then 2, then 4 on wide desktops.
-# ``lg`` must stay high enough that a 4-up card still has room for a long money
-# value such as "₹29,209.00" at FONT_DISPLAY (measured: card - padding - icon tile
-# - spacing must exceed ~145px, i.e. content >= ~1000px / window >= ~1280px).
-KPI_BREAKPOINTS = {"xs": 0, "sm": 340, "lg": 1300}
-KPI_COL = {"xs": 12, "sm": 6, "lg": 3}
-KPI_COL_THREE = {"xs": 12, "sm": 6, "lg": 4}
-
-
-def kpi_grid(cards: list[ft.Control]) -> ft.Control:
-    """Lay KPI cards out so they wrap instead of being squeezed."""
-    return ft.ResponsiveRow(
-        controls=cards,
-        spacing=T.GAP,
-        run_spacing=T.GAP,
-        breakpoints=dict(KPI_BREAKPOINTS),
-    )
+# Headline metrics are no longer one card each. ``kpi_strip`` (ui/components/
+# kpi_card.py) renders every metric inside a single panel and owns its own
+# breakpoints, so there is deliberately no KPI layout left in this module.
 
 
 # Wide panels sit side by side on a desktop and stack on a narrow window.

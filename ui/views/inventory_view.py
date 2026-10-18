@@ -18,8 +18,8 @@ from domain.exceptions import StockWiseError
 from domain.money import format_money
 from ui.components.feedback import notify, notify_error
 from ui.components.forms import dropdown_field, search_field, text_field
-from ui.components.kpi_card import kpi_card
-from ui.components.layout import KPI_COL, flow_row, kpi_grid, page_header, scroll_column, section
+from ui.components.kpi_card import KpiMetric, kpi_strip
+from ui.components.layout import flow_row, page_header, scroll_column, section
 from ui.components.table import action_cell, chip_cell, entity_cell, styled_table, text_cell
 
 _STATUS_FILTERS = [
@@ -164,17 +164,19 @@ def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
     low = sum(1 for s in all_snapshots if s.status == "low")
     out = sum(1 for s in all_snapshots if s.status == "out_of_stock")
 
-    kpis = kpi_grid([
-        kpi_card("Total Products", str(len(all_snapshots)), icon=ft.Icons.INVENTORY_2_OUTLINED,
-                 accent=T.STATUS_INFO, subtitle="In the catalogue", col=KPI_COL),
-        kpi_card("Low Stock", str(low), icon=ft.Icons.WARNING_AMBER_OUTLINED,
-                 accent=T.STATUS_WARNING, subtitle="At or below reorder point", col=KPI_COL,
-                 on_click=lambda e: _set_filter(status, state, render_table, "low")),
-        kpi_card("Out of Stock", str(out), icon=ft.Icons.REMOVE_SHOPPING_CART_OUTLINED,
-                 accent=T.STATUS_CRITICAL, subtitle="Needs restocking", col=KPI_COL,
-                 on_click=lambda e: _set_filter(status, state, render_table, "out_of_stock")),
-        kpi_card("Categories", str(len(categories)), icon=ft.Icons.CATEGORY_OUTLINED,
-                 accent=T.ACCENT, subtitle="Product groups", col=KPI_COL),
+    kpis = kpi_strip([
+        KpiMetric("Total Products", str(len(all_snapshots)), icon=ft.Icons.INVENTORY_2_OUTLINED,
+                  accent=T.STATUS_INFO, caption="In the catalogue"),
+        KpiMetric("Low Stock", str(low), icon=ft.Icons.WARNING_AMBER_OUTLINED,
+                  accent=T.STATUS_WARNING, caption="At or below reorder point",
+                  delta_kind="warn" if low else "muted",
+                  on_click=lambda e: _set_filter(status, state, render_table, "low")),
+        KpiMetric("Out of Stock", str(out), icon=ft.Icons.REMOVE_SHOPPING_CART_OUTLINED,
+                  accent=T.STATUS_CRITICAL, caption="Needs restocking",
+                  delta_kind="down" if out else "muted",
+                  on_click=lambda e: _set_filter(status, state, render_table, "out_of_stock")),
+        KpiMetric("Categories", str(len(categories)), icon=ft.Icons.CATEGORY_OUTLINED,
+                  accent=T.ACCENT, caption="Product groups"),
     ])
 
     header = page_header(

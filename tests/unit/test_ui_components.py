@@ -11,7 +11,8 @@ import flet as ft
 from app.theme import StockWiseTheme as T
 from application.services.supplier_research_service import SourceCandidate
 from domain.money import format_money
-from ui.components.kpi_card import _value_size, kpi_card, value_fits
+from ui.components.kpi_card import KPI_BREAKPOINTS, KpiMetric, _value_size, kpi_strip, value_fits
+from ui.components.layout import list_row
 from ui.views.supplier_research_panel import _confidence_color, _site_cell
 
 
@@ -40,25 +41,24 @@ def _texts(control: ft.Control):
 def test_value_size_shrinks_for_longer_strings():
     sizes = [_value_size(s) for s in ("15", "₹29,209.00", "₹1,23,456.00", "₹1,23,45,678.90")]
     assert sizes == sorted(sizes, reverse=True)
-    assert sizes[0] == T.FONT_DISPLAY
-    assert all(size <= T.FONT_DISPLAY for size in sizes)
+    assert sizes[0] == T.FONT_METRIC
+    assert all(size <= T.FONT_METRIC for size in sizes)
 
 
 def test_short_values_keep_the_display_size():
-    assert _value_size("15") == T.FONT_DISPLAY
-    assert _value_size(format_money(29209)) == T.FONT_DISPLAY
+    assert _value_size("15") == T.FONT_METRIC
+    assert _value_size(format_money(29209)) == T.FONT_METRIC
 
 
-def test_realistic_money_values_fit_a_four_up_card():
+def test_realistic_money_values_fit_a_metric_cell():
     """The actual requirement behind the sizing ladder.
 
-    The card is no_wrap, so a value that does not fit is clipped, not wrapped.
-    This was checked against the old layout, where a 40px icon tile beside the
-    number left only ~156px and made 32px impossible.
+    A metric value is ``no_wrap``, so one that does not fit is clipped rather than
+    wrapped. The budget is the text width of one cell in a four-up strip.
     """
     for amount in (0, 15, 999, 29209, 123456, 1234567, 12345678, 99999999):
         value = format_money(amount)
-        assert value_fits(value), f"{value!r} needs more than the card width"
+        assert value_fits(value), f"{value!r} needs more than the metric cell width"
 
 
 def test_even_an_oversized_value_does_not_grow_the_font():
@@ -68,19 +68,50 @@ def test_even_an_oversized_value_does_not_grow_the_font():
     assert sizes == sorted(sizes, reverse=True)
 
 
-def test_kpi_card_value_never_wraps():
+def test_four_metrics_stay_on_one_row_at_the_measured_width():
+    """The bug this replaces.
+
+    ``KPI_BREAKPOINTS`` used to put the four-across row behind ``lg: 1300``, while
+    its own comment recorded that four across needs about 1280px. Any 1280-class
+    window therefore rendered two enormous half-empty tiles instead.
+    """
+    assert KPI_BREAKPOINTS["lg"] <= 1280
+
+
+def test_kpi_strip_is_one_surface_not_four_cards():
+    """The point of the strip: four metrics, one border, one radius, no shadow.
+
+    One bordered, shadowed tile per metric is what made the dashboard read as a
+    pile of boxes.
+    """
+    strip = kpi_strip([KpiMetric(f"M{i}", str(i)) for i in range(4)])
+    surfaces = [c for c in _walk(strip) if isinstance(c, ft.Container) and c.border]
+    shadowed = [c for c in _walk(strip) if isinstance(c, ft.Container) and c.shadow]
+    assert len(surfaces) == 1, f"expected a single surface, found {len(surfaces)}"
+    assert not shadowed, "a card must carry a border or a shadow, never both"
+
+
+def test_metric_value_never_wraps():
     value = format_money(29209)
-    card = kpi_card("Total Stock Value", value, subtitle="At cost", col={"xs": 12, "lg": 3})
-    rendered = [t for t in _texts(card) if t.value == value]
+    strip = kpi_strip([KpiMetric("Total Stock Value", value, caption="At cost")])
+    rendered = [t for t in _texts(strip) if t.value == value]
     assert len(rendered) == 1
     assert rendered[0].no_wrap is True
     assert rendered[0].size == _value_size(value)
 
 
-def test_kpi_card_without_col_expands():
-    """Cards dropped into a plain Row fill it; grid cards are placed by ``col``."""
-    assert kpi_card("A", "1").expand is True
-    assert kpi_card("A", "1", col={"xs": 12, "lg": 3}).expand is False
+def test_a_list_row_draws_no_box_of_its_own():
+    """Rows were filled, rounded boxes stacked inside a card - six surfaces in one
+    panel, none of them important."""
+    row = list_row(title="Surf Excel 1kg is low", subtitle="Usable 9 · reorder point 10")
+    assert row.border_radius is None
+    assert row.bgcolor is None
+    assert not row.shadow
+
+
+def test_a_list_row_can_draw_a_divider_instead():
+    row = list_row(title="Britannia Brown Bread is out of stock", divider=True)
+    assert row.border is not None and row.border.bottom is not None
 
 
 def test_research_site_cell_never_uses_a_stretchy_row():

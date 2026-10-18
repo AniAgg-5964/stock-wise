@@ -58,13 +58,18 @@ def notify_error(page: ft.Page, exc: Exception) -> None:
 
 
 def banner(message: str, kind: str = "info") -> ft.Control:
-    """An inline message banner (persistent, unlike a snackbar)."""
+    """An inline message (persistent, unlike a snackbar).
+
+    A tinted strip with a left accent rule rather than a fully outlined box: the
+    banner is a note inside a page, and drawing all four edges around it was one
+    more competing surface.
+    """
     color = _color_for(kind)
     return ft.Container(
-        padding=ft.Padding.symmetric(horizontal=16, vertical=13),
+        padding=ft.Padding.only(left=14, right=14, top=12, bottom=12),
         border_radius=T.RADIUS_SMALL,
-        bgcolor=ft.Colors.with_opacity(0.12, color),
-        border=ft.Border.all(1, ft.Colors.with_opacity(0.30, color)),
+        bgcolor=ft.Colors.with_opacity(0.10, color),
+        border=ft.Border.only(left=ft.BorderSide(3, color)),
         content=ft.Row(
             spacing=10,
             controls=[

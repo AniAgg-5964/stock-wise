@@ -21,8 +21,8 @@ from domain.reorder import ReorderRecommendation
 from ui.components.empty_state import empty_state
 from ui.components.feedback import banner, notify, notify_error
 from ui.components.forms import text_field
-from ui.components.kpi_card import kpi_card
-from ui.components.layout import KPI_COL, flow_row, kpi_grid, page_header, scroll_column, section
+from ui.components.kpi_card import KpiMetric, kpi_strip
+from ui.components.layout import flow_row, page_header, scroll_column, section
 from ui.components.table import action_cell, chip_cell, entity_cell, styled_table, text_cell
 
 _URGENCY_STATUS = {
@@ -105,7 +105,7 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         ])
 
     state: dict = {"recos": []}
-    kpi_row = kpi_grid([])
+    kpi_holder = ft.Column(spacing=0)
     note_holder = ft.Column(spacing=T.GAP_SMALL)
     table_holder = ft.Column(spacing=0)
 
@@ -143,19 +143,24 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         critical = sum(1 for r in recos if r.urgency in ("critical", "high"))
         expiry_flags = sum(1 for r in recos if r.expiry_review_required)
 
-        kpi_row.controls = [
-            kpi_card("Products needing an order", str(len(recos)),
-                     subtitle="within the protection period", icon=ft.Icons.PLAYLIST_ADD_CHECK,
-                     col=KPI_COL),
-            kpi_card("Estimated purchase cost", format_money(total_cost),
-                     subtitle="from preferred supplier cost", icon=ft.Icons.PAYMENTS_OUTLINED,
-                     accent=T.ACCENT, col=KPI_COL),
-            kpi_card("Urgent (critical + high)", str(critical),
-                     subtitle="order soon", icon=ft.Icons.PRIORITY_HIGH,
-                     accent=T.STATUS_CRITICAL if critical else T.STATUS_HEALTHY, col=KPI_COL),
-            kpi_card("Expiry review flagged", str(expiry_flags),
-                     subtitle="consider markdown/transfer", icon=ft.Icons.EVENT_BUSY_OUTLINED,
-                     accent=T.STATUS_WARNING if expiry_flags else T.STATUS_HEALTHY, col=KPI_COL),
+        kpi_holder.controls = [
+            kpi_strip([
+                KpiMetric("Products needing an order", str(len(recos)),
+                          caption="within the protection period",
+                          icon=ft.Icons.PLAYLIST_ADD_CHECK),
+                KpiMetric("Estimated purchase cost", format_money(total_cost),
+                          caption="from preferred supplier cost",
+                          icon=ft.Icons.PAYMENTS_OUTLINED, accent=T.ACCENT),
+                KpiMetric("Urgent (critical + high)", str(critical),
+                          caption="order soon", icon=ft.Icons.PRIORITY_HIGH,
+                          accent=T.STATUS_CRITICAL if critical else T.STATUS_HEALTHY,
+                          delta_kind="down" if critical else "muted"),
+                KpiMetric("Expiry review flagged", str(expiry_flags),
+                          caption="consider markdown/transfer",
+                          icon=ft.Icons.EVENT_BUSY_OUTLINED,
+                          accent=T.STATUS_WARNING if expiry_flags else T.STATUS_HEALTHY,
+                          delta_kind="warn" if expiry_flags else "muted"),
+            ])
         ]
 
         note_holder.controls = [
@@ -211,6 +216,6 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         header,
         toolbar,
         note_holder,
-        kpi_row,
+        kpi_holder,
         section("Recommendations", table_holder),
     ])

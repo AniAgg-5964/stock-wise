@@ -20,8 +20,8 @@ from ui.components.chart import bar_chart, chart_legend
 from ui.components.empty_state import empty_state
 from ui.components.feedback import banner, notify, notify_error
 from ui.components.forms import dropdown_field, text_field
-from ui.components.kpi_card import kpi_card
-from ui.components.layout import KPI_COL, flow_row, kpi_grid, page_header, scroll_column, section
+from ui.components.kpi_card import KpiMetric, kpi_strip
+from ui.components.layout import flow_row, page_header, scroll_column, section
 from ui.components.table import styled_table, text_cell
 
 _METHODS = [
@@ -66,7 +66,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
 
     state = {"product_id": products[0].id}
 
-    kpi_row = kpi_grid([])
+    kpi_holder = ft.Column(spacing=0)
     note_holder = ft.Column(spacing=T.GAP_SMALL)
     chart_holder = ft.Column(spacing=T.GAP_SMALL)
     metrics_holder = ft.Column(spacing=0)
@@ -172,20 +172,20 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         )
 
         # --- KPI cards ---
-        kpi_row.controls = [
-            kpi_card("Average daily demand", f"{result.average_daily_demand:g}",
-                     subtitle="units/day (last 28 days)", icon=ft.Icons.TIMELINE,
-                     col=KPI_COL),
-            kpi_card(f"Forecast \u00b7 next {len(result.points)} days", f"{result.total_qty:g}",
-                     subtitle="units expected", icon=ft.Icons.STACKED_LINE_CHART,
-                     accent=T.ACCENT, col=KPI_COL),
-            kpi_card("Observed sales days", str(result.observed_days),
-                     subtitle=f"minimum {Config.MIN_TRAINING_DAYS} for a model",
-                     icon=ft.Icons.CALENDAR_MONTH_OUTLINED, col=KPI_COL),
-            kpi_card("Method", "Baseline" if result.is_baseline else "XGBoost",
-                     subtitle=result.method_label, icon=ft.Icons.MODEL_TRAINING_OUTLINED,
-                     accent=T.STATUS_INFO if result.is_baseline else T.STATUS_HEALTHY,
-                     col=KPI_COL),
+        kpi_holder.controls = [
+            kpi_strip([
+                KpiMetric("Average daily demand", f"{result.average_daily_demand:g}",
+                          caption="units/day (last 28 days)", icon=ft.Icons.TIMELINE),
+                KpiMetric(f"Forecast \u00b7 next {len(result.points)} days", f"{result.total_qty:g}",
+                          caption="units expected", icon=ft.Icons.STACKED_LINE_CHART,
+                          accent=T.ACCENT),
+                KpiMetric("Observed sales days", str(result.observed_days),
+                          caption=f"minimum {Config.MIN_TRAINING_DAYS} for a model",
+                          icon=ft.Icons.CALENDAR_MONTH_OUTLINED),
+                KpiMetric("Method", "Baseline" if result.is_baseline else "XGBoost",
+                          caption=result.method_label, icon=ft.Icons.MODEL_TRAINING_OUTLINED,
+                          accent=T.STATUS_INFO if result.is_baseline else T.STATUS_HEALTHY),
+            ])
         ]
 
         # --- Notes ---
@@ -298,7 +298,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         header,
         controls_row,
         note_holder,
-        kpi_row,
+        kpi_holder,
         section("Demand history and forecast", chart_holder,
                 subtitle=None),
         method_text,
