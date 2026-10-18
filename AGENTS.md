@@ -68,6 +68,11 @@ Rules from the product spec (do not violate):
 - `integrations/tinyfish/` — `client.py` (stdlib urllib; Search + Fetch only, no
   metered Agent/Browser), `schemas.py`, `parser.py` (deterministic fact extraction),
   `source_validation.py`. Transport is injectable so tests never hit the network.
+- `integrations/tinyfish/source_validation.py` also holds `KNOWN_BOT_HOSTILE_HOSTS`
+  plus `host_of()` / `is_known_bot_hostile()`. This list is **advisory** — it warns and
+  deprioritises, and must never be used to refuse a URL the user chose. Pair it with
+  the learned list (`SqliteExternalSourceRepository.list_failed_sources`) rather than
+  trusting the curated one alone.
 - `imports/templates/` — CSV templates; `migrations/` — schema versions
 - `scripts/` — seed_demo_data.py (and later train/evaluate)
 - `tests/unit|integration|acceptance/`; `tests/conftest.py` provides the `ctx` and `wired_app_context` fixtures

@@ -61,3 +61,13 @@ class TinyFishError(StockWiseError):
 
 class ResearchNotConfiguredError(TinyFishError):
     """Supplier research was requested but no API key is configured."""
+
+
+class DuplicateSupplierError(ValidationError):
+    """A supplier with the same website was already saved."""
+
+    def __init__(self, field: str, message: str, *, existing_id: int | None = None,
+                 existing_name: str | None = None) -> None:
+        self.existing_id = existing_id
+        self.existing_name = existing_name
+        super().__init__(field, message)

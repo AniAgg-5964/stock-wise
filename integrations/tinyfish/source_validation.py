@@ -24,6 +24,25 @@ ALLOWED_SCHEMES = frozenset({"http", "https"})
 #: A page shorter than this is almost always a stub, not a product listing.
 MIN_CONTENT_CHARS = 400
 
+#: Hosts that commonly serve a bot wall to anything that is not a logged-in human
+#: browser. TinyFish's free Fetch API is not a headless browser, so these usually
+#: refuse a fetch outright — which is why most Indian B2B marketplace listings
+#: come back empty.
+#:
+#: This list is **advisory only**. It never blocks a page: sites change their
+#: defences, and the user may know better than we do. It exists so we can warn
+#: *before* spending a fetch, and so batch actions can prioritise better targets.
+KNOWN_BOT_HOSTILE_HOSTS = frozenset({
+    "indiamart.com", "tradeindia.com", "exportersindia.com", "dir.indiamart.com",
+    "amazon.in", "amazon.com", "flipkart.com", "meesho.com", "snapdeal.com",
+    "jiomart.com", "bigbasket.com", "blinkit.com", "zepto.com", "swiggy.com",
+    "alibaba.com", "aliexpress.com", "made-in-china.com", "globalsources.com",
+    "ebay.com", "etsy.com", "walmart.com", "target.com", "ebay.co.in",
+})
+
+#: How far back to look when learning which hosts have already refused us.
+FAILED_HOST_LOOKBACK_DAYS = 30
+
 #: Phrases that mean "we got a wall, not a page" — never parse facts from these.
 _WALL_MARKERS = (
     "sign in to continue",
@@ -116,3 +135,33 @@ def screen_text(text: str | None, *, min_chars: int = MIN_CONTENT_CHARS) -> Scre
         return ScreenResult(usable=False, reason="too_short")
 
     return ScreenResult(usable=True, reason="ok", content_hash=content_hash(cleaned))
+
+
+# ------------------------------------------------------------------- host rules
+def host_of(url: str | None) -> str:
+    """Return the bare host of ``url``: lower-cased, no scheme, port or ``www.``.
+
+    Accepts a bare domain (``indiamart.com``) as well as a full URL, because
+    supplier records are hand-typed and users rarely include a scheme.
+    """
+    if not url:
+        return ""
+    candidate = url.strip()
+    parts = urlparse(candidate if "//" in candidate else f"//{candidate}")
+    host = (parts.netloc or "").split("@")[-1].split(":")[0].strip().lower()
+    return host[4:] if host.startswith("www.") else host
+
+
+def is_known_bot_hostile(url: str | None) -> bool:
+    """True when this host — or a parent of it — usually refuses automated fetches.
+
+    Matches on parent domains too, so ``in.indiamart.com`` is caught by
+    ``indiamart.com``. Advisory: callers warn and reprioritise, never refuse.
+    """
+    host = host_of(url)
+    if not host:
+        return False
+    return any(
+        host == known or host.endswith(f".{known}")
+        for known in KNOWN_BOT_HOSTILE_HOSTS
+    )

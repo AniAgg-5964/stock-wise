@@ -92,6 +92,24 @@ class SqliteExternalSourceRepository(SqliteRepository):
             ).fetchall()
         return [_row_to_source(r) for r in rows]
 
+    def list_failed_sources(self, within_days: int = 30,
+                            limit: int = 500,
+                            conn: sqlite3.Connection | None = None) -> Sequence[ExternalSource]:
+        """Sources whose fetch failed, so we can warn before spending another fetch.
+
+        This is the *learned* half of the block hint: it reflects what actually
+        happened on this machine, unlike the curated host list which is a guess.
+        """
+        with self._conn(conn) as c:
+            rows = c.execute(
+                """SELECT * FROM external_sources
+                   WHERE parse_status LIKE 'fetch_error%'
+                     AND retrieved_at >= datetime('now', ?)
+                   ORDER BY id DESC LIMIT ?""",
+                (f"-{int(within_days)} days", int(limit)),
+            ).fetchall()
+        return [_row_to_source(r) for r in rows]
+
     def count(self, conn: sqlite3.Connection | None = None) -> int:
         with self._conn(conn) as c:
             return int(c.execute("SELECT COUNT(*) AS n FROM external_sources").fetchone()["n"])

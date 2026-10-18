@@ -1,28 +1,38 @@
 """StockWise — supplier research service (optional TinyFish stage).
 
-Orchestrates web research for supplier facts. It is the *only* place that may
-call TinyFish: UI event handlers never talk to the network.
+Orchestrates web research for suppliers. It is the *only* place that may call
+TinyFish: UI event handlers never talk to the network.
+
+Two jobs, in priority order:
+
+1. **Find suppliers.** A search result is a page, not a company, so the useful
+   output is a candidate the user can turn into a real supplier record. This does
+   not depend on the page being fetchable, which matters because most Indian B2B
+   marketplaces refuse automated fetches outright.
+2. **Extract facts** where possible. Every fact is stored as a *candidate*;
+   nothing reaches ``product_suppliers`` until the user verifies and applies it.
 
 Safety rules enforced here:
 
 * research is **opt-in** (a stored setting, off by default)
 * a missing API key is reported, never crashes the app
-* every fact is stored as a **candidate**; nothing reaches ``product_suppliers``
-  until the user verifies and applies it
+* blocked/thin pages are reported and skipped, never guessed at
 * every fetch is capped, so a stray loop cannot burn the free daily allowance
 """
 
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import Optional, Sequence
 
 from app.config import Config
-from domain.entities import ExternalSource, ProductSupplier, SupplierObservation
+from domain.entities import ExternalSource, ProductSupplier, Supplier, SupplierObservation
 from domain.exceptions import (
+    DuplicateSupplierError,
     NotFoundError,
     ResearchNotConfiguredError,
     TinyFishError,
@@ -31,7 +41,13 @@ from domain.exceptions import (
 from domain.money import to_money
 from integrations.tinyfish import parser as fact_parser
 from integrations.tinyfish.client import PROVIDER
-from integrations.tinyfish.source_validation import screen_text, validate_url
+from integrations.tinyfish.source_validation import (
+    FAILED_HOST_LOOKBACK_DAYS,
+    host_of,
+    is_known_bot_hostile,
+    screen_text,
+    validate_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +56,7 @@ SETTING_ENABLED = "supplier_research_enabled"
 #: Hard ceiling on pages fetched by a single research action.
 MAX_FETCHES_PER_ACTION = 5
 
-#: observation field -> (product_suppliers attribute, parser)
+#: observation field -> product_suppliers attribute
 _APPLICABLE_FIELDS = {
     fact_parser.FIELD_UNIT_COST: "unit_cost",
     fact_parser.FIELD_MOQ: "minimum_order_qty",
@@ -71,7 +87,12 @@ class ResearchStatus:
 
 @dataclass
 class SourceCandidate:
-    """A search result worth (maybe) fetching."""
+    """A search result worth looking at.
+
+    ``block_reason`` is advisory: it says a fetch probably will not work, but the
+    user can always try anyway. It exists so a batch action does not waste its
+    budget and so the user is not surprised.
+    """
 
     url: str
     title: str = ""
@@ -79,6 +100,18 @@ class SourceCandidate:
     site_name: str = ""
     source_id: int | None = None
     cached: bool = False
+    host: str = ""
+    block_reason: str | None = None
+    #: Set when this candidate's website is already a saved supplier.
+    supplier_id: int | None = None
+
+    @property
+    def likely_blocked(self) -> bool:
+        return self.block_reason is not None
+
+    @property
+    def already_saved(self) -> bool:
+        return self.supplier_id is not None
 
 
 @dataclass
@@ -89,6 +122,25 @@ class ResearchResult:
     observations: list[SupplierObservation] = field(default_factory=list)
     cached: bool = False
     skipped: list[str] = field(default_factory=list)
+
+
+@dataclass
+class SupplierDraft:
+    """A proposed supplier record, not yet saved.
+
+    ``name`` is a *guess* from the website domain. A search result's title
+    describes a product rather than a company, so this must always be presented
+    as an editable suggestion.
+    """
+
+    name: str
+    website_url: str
+    notes: str
+    existing_supplier: Optional[Supplier] = None
+
+    @property
+    def already_saved(self) -> bool:
+        return self.existing_supplier is not None
 
 
 def _now() -> str:
@@ -107,6 +159,7 @@ class SupplierResearchService:
         settings,
         client,
         *,
+        supplier_service=None,
         cache_minutes: int | None = None,
         max_fetches_per_action: int | None = None,
     ) -> None:
@@ -117,6 +170,7 @@ class SupplierResearchService:
         self.audit = audit
         self.settings = settings
         self.client = client
+        self.supplier_service = supplier_service
         self.cache_minutes = (
             Config.TINYFISH_CACHE_MINUTES if cache_minutes is None else int(cache_minutes)
         )
@@ -158,13 +212,19 @@ class SupplierResearchService:
         query: str | None = None,
         limit: int = 10,
     ) -> list[SourceCandidate]:
-        """Find candidate supplier pages for a product (or a free-text query)."""
+        """Find candidate supplier pages for a product (or a free-text query).
+
+        Candidates are annotated with whether their site is likely to refuse a
+        fetch and whether they are already a saved supplier, so the UI can warn
+        and offer the right action without spending a fetch to find out.
+        """
         self._guard()
         query = (query or self.build_query(product_id)).strip()
         if not query:
             raise ValidationError("query", "Enter something to search for")
 
         hits = self.client.search(query, limit=limit)
+        failed_hosts = self._hosts_that_failed_before()
         candidates: list[SourceCandidate] = []
         for hit in hits:
             url = validate_url(hit.url)
@@ -174,9 +234,13 @@ class SupplierResearchService:
             source = self.sources.create(ExternalSource(
                 provider=PROVIDER, url=url, query=query, parse_status="discovered",
             ))
+            host = host_of(url)
+            existing = self.find_supplier_for_url(url)
             candidates.append(SourceCandidate(
                 url=url, title=hit.title, snippet=hit.snippet,
-                site_name=hit.site_name or _site_from_url(url), source_id=source.id,
+                site_name=hit.site_name or host, source_id=source.id, host=host,
+                block_reason=_block_reason(host, failed_hosts),
+                supplier_id=existing.id if existing else None,
             ))
         return candidates
 
@@ -193,6 +257,74 @@ class SupplierResearchService:
         query = " ".join(p for p in parts if p).strip()
         return f"{query} wholesale supplier price MOQ India"
 
+    # ------------------------------------------------------- supplier records
+    def find_supplier_for_url(self, url: str | None) -> Optional[Supplier]:
+        """An existing supplier on the same website, matched by host.
+
+        Matching on host rather than exact URL because supplier websites are
+        hand-typed: they arrive as ``indiamart.com`` as often as
+        ``https://www.indiamart.com/``. Scanning the (small) supplier list keeps
+        the comparison tolerant of every such variation.
+        """
+        host = host_of(url)
+        if not host or self.supplier_service is None:
+            return None
+        for supplier in self.supplier_service.list_suppliers(active_only=False):
+            if host_of(supplier.website_url) == host:
+                return supplier
+        return None
+
+    def draft_supplier(self, candidate: SourceCandidate, *, query: str | None = None) -> SupplierDraft:
+        """Build — but do not save — a supplier record from a search candidate."""
+        return SupplierDraft(
+            name=_name_guess_from_host(candidate.host or host_of(candidate.url)),
+            website_url=candidate.url,
+            notes=_provenance_notes(candidate, query),
+            existing_supplier=self.find_supplier_for_url(candidate.url),
+        )
+
+    def add_supplier_from_candidate(
+        self,
+        draft: SupplierDraft,
+        *,
+        actor: str = "user",
+        force: bool = False,
+    ) -> Supplier:
+        """Save a researched candidate as a supplier record.
+
+        A duplicate website is refused so the supplier list stays trustworthy.
+        ``force`` exists for a genuine second branch of the same company.
+        """
+        if self.supplier_service is None:
+            raise TinyFishError("Supplier records are not available in this context")
+
+        name = (draft.name or "").strip()
+        if not name:
+            raise ValidationError("name", "Give the supplier a name")
+
+        existing = self.find_supplier_for_url(draft.website_url)
+        if existing is not None and not force:
+            raise DuplicateSupplierError(
+                "website_url",
+                f"'{existing.name}' is already saved with this website",
+                existing_id=existing.id,
+                existing_name=existing.name,
+            )
+
+        supplier = self.supplier_service.create_supplier(
+            Supplier(
+                name=name,
+                website_url=(draft.website_url or "").strip() or None,
+                notes=draft.notes,
+            ),
+            actor=actor,
+        )
+        self.audit.record_event(
+            "supplier_added_from_research", "supplier", supplier.id,
+            {"name": supplier.name, "website": supplier.website_url}, actor,
+        )
+        return supplier
+
     # --------------------------------------------------------------- research
     def research(
         self,
@@ -207,6 +339,47 @@ class SupplierResearchService:
             [url], product_id=product_id, supplier_id=supplier_id, query=query
         )
 
+    def research_candidates(
+        self,
+        candidates: Sequence[SourceCandidate],
+        *,
+        product_id: int | None = None,
+        query: str | None = None,
+        skip_blocked: bool = True,
+    ) -> ResearchResult:
+        """Research a batch of candidates in one capped action.
+
+        With ``skip_blocked`` the sites flagged as likely to refuse are passed
+        over rather than burning fetch budget on them, and the reason is reported
+        back so the user still knows they were skipped.
+        """
+        self._guard()
+        result = ResearchResult()
+
+        urls: list[str] = []
+        supplier_by_url: dict[str, int] = {}
+        for candidate in candidates:
+            label = candidate.site_name or candidate.host or _short(candidate.url)
+            if skip_blocked and candidate.likely_blocked:
+                result.skipped.append(f"{label}: {candidate.block_reason}")
+                continue
+            urls.append(candidate.url)
+            if candidate.supplier_id:
+                supplier_by_url[candidate.url] = candidate.supplier_id
+
+        if not urls:
+            result.skipped.append("Nothing left to research.")
+            return result
+
+        outcome = self.research_many(
+            urls, product_id=product_id, query=query, supplier_by_url=supplier_by_url
+        )
+        result.sources = outcome.sources
+        result.observations = outcome.observations
+        result.cached = outcome.cached
+        result.skipped.extend(outcome.skipped)
+        return result
+
     def research_many(
         self,
         urls: Sequence[str],
@@ -214,6 +387,7 @@ class SupplierResearchService:
         product_id: int | None = None,
         supplier_id: int | None = None,
         query: str | None = None,
+        supplier_by_url: dict[str, int] | None = None,
     ) -> ResearchResult:
         """Fetch up to ``max_fetches_per_action`` pages and extract facts."""
         self._guard()
@@ -225,7 +399,7 @@ class SupplierResearchService:
             if url:
                 validated.append(url)
             else:
-                result.skipped.append(f"{raw_url} (unsupported or blocked URL)")
+                result.skipped.append(f"{_short(raw_url)} (unsupported or blocked URL)")
 
         # Serve from cache when this page was already parsed recently.
         fresh: list[str] = []
@@ -251,8 +425,13 @@ class SupplierResearchService:
         if fresh:
             pages = self.client.fetch(fresh)
             for page in pages:
+                page_url = page.url or page.final_url
                 result.sources.append(self._absorb_page(
-                    page, product_id=product_id, supplier_id=supplier_id, query=query, result=result
+                    page,
+                    product_id=product_id,
+                    supplier_id=(supplier_by_url or {}).get(page_url, supplier_id),
+                    query=query,
+                    result=result,
                 ))
         return result
 
@@ -403,6 +582,57 @@ class SupplierResearchService:
             raise NotFoundError("Supplier observation", observation_id)
         return observation
 
+    def _hosts_that_failed_before(self) -> set[str]:
+        """Hosts that have already refused us, learned from our own history."""
+        try:
+            failed = self.sources.list_failed_sources(within_days=FAILED_HOST_LOOKBACK_DAYS)
+        except Exception:  # pragma: no cover - a hint must never break a search
+            logger.warning("Could not read past fetch failures", exc_info=True)
+            return set()
+        return {host_of(source.url) for source in failed if host_of(source.url)}
+
+
+def _block_reason(host: str, failed_hosts: set[str]) -> str | None:
+    """Why a fetch may not work, or ``None`` when there is no reason to doubt it.
+
+    A host that actually refused us outranks the curated list, because it is
+    evidence rather than a guess.
+    """
+    if host and host in failed_hosts:
+        return "refused us before — likely blocks automated access"
+    if is_known_bot_hostile(host):
+        return "often blocks automated access"
+    return None
+
+
+def _name_guess_from_host(host: str) -> str:
+    """A plausible company name from a domain root.
+
+    Explicitly a guess — the caller shows it as an editable suggestion. Trying to
+    be cleverer here would be worse: search titles describe products, not firms.
+    """
+    root = (host or "").split(".")[0]
+    words = [word for word in re.split(r"[^a-z0-9]+", root.lower()) if word]
+    return " ".join(words).title()
+
+
+def _provenance_notes(candidate: SourceCandidate, query: str | None) -> str:
+    """Notes recording where this supplier came from, so it can be re-checked.
+
+    Always names the tool, even without a query: a record that says a supplier
+    came off the web should say so regardless of how it was found.
+    """
+    origin = "Discovered via TinyFish search"
+    if query:
+        origin += f' for "{query}"'
+    lines: list[str] = [origin + "."]
+    if candidate.title:
+        lines.append(f"Page title: {candidate.title}")
+    if candidate.snippet:
+        lines.append(candidate.snippet[:280])
+    lines.append(f"Source: {candidate.url}")
+    return "\n".join(lines)
+
 
 def _coerce_observation_value(observation: SupplierObservation):
     """Validate a scraped string before it can touch a typed column.
@@ -445,22 +675,19 @@ def _friendly_fetch_error(error: str | None) -> str:
     lowered = text.lower()
     if "target_http_error" in lowered or "403" in lowered:
         return "the site refused the request (it likely blocks automated access)"
+    if "empty_content" in lowered or lowered == "empty":
+        return "the page came back empty (usually a JavaScript-only site)"
     if "404" in lowered or "not_found" in lowered:
         return "the page no longer exists"
     if "timeout" in lowered:
         return "the page took too long to load"
     if "dns" in lowered or "resolve" in lowered:
         return "the site's address could not be resolved"
+    if "ssl" in lowered or "certificate" in lowered:
+        return "the site's security certificate could not be read"
     return text[:120] or "the page could not be fetched"
 
 
 def _short(url: str, limit: int = 68) -> str:
     """Trim a long URL so skip messages stay on one readable line."""
     return url if len(url) <= limit else url[: limit - 3] + "\u2026"
-
-
-def _site_from_url(url: str) -> str:
-    from urllib.parse import urlparse
-
-    host = urlparse(url).netloc
-    return host[4:] if host.startswith("www.") else host

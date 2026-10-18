@@ -83,7 +83,7 @@ def ctx(tmp_path):
     tinyfish_client = TinyFishClient("")
     research_service = SupplierResearchService(
         external_sources, supplier_observations, suppliers, products, audit,
-        settings, tinyfish_client,
+        settings, tinyfish_client, supplier_service=supplier_service,
     )
 
     return SimpleNamespace(

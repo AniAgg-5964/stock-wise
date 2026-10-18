@@ -78,7 +78,7 @@ whenever the model is missing or worse than the baseline):
 | **Forecasting** | Generate forecasts (baselines + XGBoost), see accuracy vs baselines, the likely range around each day, and train the model. |
 | **Reorder Center** | Periodic-review recommendations with a "Why?" breakdown (P = L + R, safety stock, inventory position, MOQ/pack, budget), and recording the order you decide to place. |
 | **Expiry Management** | Batches by expiry, FEFO-aware "at risk" estimates, estimated value at risk, waste write-off. |
-| **Supplier Research** | Supplier records and product links (lead time, MOQ, pack, cost), plus optional live web research (TinyFish): candidate prices/MOQ/lead times for you to verify and apply. |
+| **Supplier Research** | Supplier records and product links (lead time, MOQ, pack, cost), plus optional live web research (TinyFish): turn search hits into supplier records, and extract candidate prices/MOQ/lead times for you to verify and apply. |
 | **Reports** | Sales/margin, top products, stock valuation, forecast accuracy, waste, open purchase orders — all exportable to CSV. |
 | **Data & Imports** | Validated CSV import (row-level errors) and CSV export. |
 | **Settings** | Store preferences, baseline fallback, safety-stock policy and service level, budget, forecast model management, backups, diagnostics. |
@@ -196,13 +196,27 @@ TinyFish and extract candidate facts from them.
 
 1. **Search** — TinyFish Search (`api.search.tinyfish.ai`) returns ranked pages for a
    product. Only fetchable URLs are kept: PDFs, images and non-http schemes are dropped.
-2. **Research** — TinyFish Fetch (`api.fetch.tinyfish.ai`) retrieves the page text. Pages that
-   are too thin, JS-only or behind a login wall are recorded and skipped.
-3. **Extract** — deterministic regexes pull out `unit_cost`, `minimum_order_qty`, `pack_size`
-   and `lead_time_days`. Every fact keeps the snippet that produced it and a confidence
-   score describing how explicitly the page stated the value.
-4. **Verify and apply** — *you* choose the supplier and apply. Only then is anything written
-   to `product_suppliers`, and the write is audited.
+2. **Add as supplier** — any result can be saved as a real supplier record (name,
+   website, and notes recording the search that found it). The name is *guessed*
+   from the domain because a search result's title describes a product, not a
+   company — so it is always shown as an editable suggestion. Duplicates are
+   refused by website host, with an "Add anyway" escape for a second branch.
+3. **Research** — TinyFish Fetch (`api.fetch.tinyfish.ai`) retrieves the page text.
+   Pages that are too thin, JS-only or behind a login wall are recorded and skipped.
+4. **Extract** — deterministic regexes pull out `unit_cost`, `minimum_order_qty`,
+   `pack_size` and `lead_time_days`. Every fact keeps the snippet that produced it
+   and a confidence score describing how explicitly the page stated the value.
+5. **Verify and apply** — *you* choose the supplier and apply. Only then is anything
+   written to `product_suppliers`, and the write is audited.
+
+**Why step 2 matters.** The free Fetch API is not a headless browser, so large
+marketplaces (IndiaMART, TradeIndia, Amazon, Flipkart, …) usually refuse it
+outright — most Indian B2B listings are unsearchable this way. Adding a supplier
+needs only Search metadata, so that path still works on exactly the sites where
+fact extraction cannot. Sites likely to refuse are labelled under their name, and
+the batch button skips them; **this is advisory and never blocks** — any row can
+still be researched manually, and a site that refused us before is flagged from
+our own history rather than a hard-coded list.
 
 **Guardrails.**
 
@@ -211,7 +225,7 @@ TinyFish and extract candidate facts from them.
 - Free APIs only, with a per-action fetch cap and a 60-minute result cache.
 - Values are validated before use; a foreign-currency price is refused rather than
   converted, and a non-numeric value can never reach a money column.
-- Only public pages are read; blocked sites are reported and skipped.
+- Only public pages are read; blocked sites are reported and skipped, never parsed.
 
 ## License / data notes
 

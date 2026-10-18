@@ -95,7 +95,7 @@ def build_context(db: DatabaseConnection) -> SimpleNamespace:
     )
     research_service = SupplierResearchService(
         external_sources, supplier_observations, suppliers, products, audit, settings,
-        tinyfish_client,
+        tinyfish_client, supplier_service=supplier_service,
     )
 
     return SimpleNamespace(

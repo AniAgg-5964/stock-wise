@@ -1,8 +1,13 @@
 """StockWise — Live supplier research panel (optional TinyFish stage).
 
-Rendered inside the Supplier Research screen. Every fact found on the web is
-shown as a *candidate*; nothing updates a supplier, cost, MOQ or lead time until
-the user picks the supplier and applies it.
+Rendered inside the Supplier Research screen. Two distinct outcomes are kept
+apart on purpose:
+
+* **Add as supplier** — turns a search result into a real supplier record. This
+  works purely from search metadata, so it succeeds even on the large marketplaces
+  that refuse to be fetched.
+* **Research** — fetches the page and extracts candidate facts (price, MOQ,
+  pack size, lead time). Nothing updates a supplier until the user applies a fact.
 
 Design notes:
 * network calls run off the UI thread (``asyncio.to_thread``) so a slow page
@@ -57,6 +62,32 @@ def _status_notice(status) -> list[ft.Control]:
     return []
 
 
+def _site_cell(candidate) -> ft.DataCell:
+    """Site name plus a one-line note about whether a fetch is worth trying.
+
+    The inner Row must be tight: Flet lays DataCell content out with unbounded
+    width, and a stretchy Row inside a cell silently blanks the whole table.
+    """
+    name = candidate.site_name or candidate.host
+    note, colour = "", T.TEXT_TERTIARY
+    if candidate.likely_blocked:
+        note, colour = candidate.block_reason, T.STATUS_WARNING
+    elif candidate.already_saved:
+        note = "Already saved as a supplier"
+
+    if not note:
+        return text_cell(name, color=T.TEXT_SECONDARY)
+
+    return ft.DataCell(
+        ft.Row(spacing=10, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+               controls=[ft.Column(spacing=1, tight=True, controls=[
+                   ft.Text(name, size=T.FONT_BODY, color=T.TEXT_SECONDARY,
+                           weight=ft.FontWeight.W_500),
+                   ft.Text(note, size=T.FONT_TINY, color=colour),
+               ])])
+    )
+
+
 def build_research_panel(
     page: ft.Page, navigate: Callable[[str], None], products, suppliers
 ) -> ft.Control:
@@ -67,7 +98,13 @@ def build_research_panel(
 
     body_holder = ft.Column(spacing=T.GAP_SMALL)
     status_text = ft.Text("", size=T.FONT_TINY, color=T.TEXT_TERTIARY)
-    state: dict = {"busy": False, "candidates": []}
+    state: dict = {
+        "busy": False,
+        "candidates": [],
+        "last_query": None,
+        # Kept mutable so a supplier added here is usable without leaving the screen.
+        "suppliers": list(suppliers),
+    }
 
     def _say(message: str, colour: str = T.TEXT_TERTIARY) -> None:
         status_text.value = message
@@ -94,6 +131,19 @@ def build_research_panel(
         product = app.product_service.get_product(product_id)
         return product.name if product else ""
 
+    def _supplier_options() -> list[tuple[str, str]]:
+        return [(str(s.id), s.name) for s in state["suppliers"]]
+
+    def _effective_query() -> str | None:
+        """The query the last search actually used, for provenance notes."""
+        typed = (query_field.value or "").strip()
+        if typed:
+            return typed
+        try:
+            return research.build_query(_selected_product_id()) or None
+        except StockWiseError:
+            return None
+
     # ------------------------------------------------------------------ render
     def _render() -> None:
         if not status.can_run:
@@ -106,21 +156,30 @@ def build_research_panel(
             flow_row([
                 (product_dd, {"xs": 12, "sm": 6, "lg": 4}),
                 (query_field, {"xs": 12, "sm": 6, "lg": 5}),
-                (find_button, {"xs": 12, "sm": 12, "lg": 3}),
+                (find_button, {"xs": 12, "sm": 6, "lg": 3}),
             ]),
             status_text,
         ]
 
-        if state["candidates"]:
+        candidates = state["candidates"]
+        if candidates:
+            unblocked = sum(1 for c in candidates if not c.likely_blocked)
             parts += [
                 ft.Divider(height=1, color=T.BORDER_SUBTLE),
-                ft.Text("Candidate sources", size=T.FONT_SMALL, color=T.TEXT_SECONDARY,
-                        weight=ft.FontWeight.W_600),
+                ft.Row(spacing=10, controls=[
+                    ft.Text("Candidate sources", size=T.FONT_SMALL, color=T.TEXT_SECONDARY,
+                            weight=ft.FontWeight.W_600, expand=True),
+                    ft.TextButton(
+                        content=f"Research {unblocked} that may work",
+                        icon=ft.Icons.TRAVEL_EXPLORE,
+                        on_click=lambda e: _research_unblocked(),
+                    ),
+                ]),
                 styled_table(
-                    ["Site", "Page", "Why it matched", ""],
+                    ["Site", "Page", "Why it matched", "", ""],
                     [
                         ft.DataRow(cells=[
-                            text_cell(candidate.site_name, color=T.TEXT_SECONDARY),
+                            _site_cell(candidate),
                             ft.DataCell(ft.TextButton(
                                 content=candidate.title or candidate.url,
                                 url=candidate.url,
@@ -130,9 +189,18 @@ def build_research_panel(
                             action_cell(lambda e, c=candidate: _research(c),
                                         icon=ft.Icons.TRAVEL_EXPLORE,
                                         tooltip="Fetch this page and extract facts"),
+                            action_cell(lambda e, c=candidate: _open_add_supplier(c),
+                                        icon=ft.Icons.PERSON_ADD_ALT,
+                                        tooltip="Save this as a supplier"),
                         ])
-                        for candidate in state["candidates"]
+                        for candidate in candidates
                     ],
+                    empty_message="No candidate sources yet.",
+                ),
+                ft.Text(
+                    "A greyed note under a site means it usually refuses automated "
+                    "fetches — you can still try it, and the batch button skips those.",
+                    size=T.FONT_TINY, color=T.TEXT_TERTIARY,
                 ),
             ]
 
@@ -186,10 +254,14 @@ def build_research_panel(
                 outcome = await asyncio.to_thread(func, *args, **kwargs)
                 if isinstance(outcome, list):
                     state["candidates"] = outcome
-                    _say(f"Found {len(outcome)} candidate source(s). Pick one to research.")
+                    blocked = sum(1 for c in outcome if c.likely_blocked)
+                    message = f"Found {len(outcome)} candidate source(s)."
+                    if blocked:
+                        message += f" {blocked} usually refuse automated fetches."
+                    _say(message)
                 else:
                     found = len(getattr(outcome, "observations", []) or [])
-                    skipped = "; ".join(getattr(outcome, "skipped", []) or [])[:200]
+                    skipped = "; ".join(getattr(outcome, "skipped", []) or [])[:220]
                     if skipped:
                         _say(skipped, T.STATUS_WARNING)
                     elif outcome.cached:
@@ -212,21 +284,99 @@ def build_research_panel(
 
     def _do_search(e=None) -> None:
         state["candidates"] = []
+        state["last_query"] = _effective_query()
         _run(research.search,
              product_id=_selected_product_id(),
              query=(query_field.value or "").strip() or None)
 
     def _research(candidate) -> None:
-        _run(research.research, url=candidate.url, product_id=_selected_product_id())
+        _run(research.research, url=candidate.url,
+             product_id=_selected_product_id(), supplier_id=candidate.supplier_id)
+
+    def _research_unblocked() -> None:
+        """Fetch only the sources most likely to return usable content."""
+        _run(research.research_candidates, state["candidates"],
+             product_id=_selected_product_id(),
+             query=state["last_query"], skip_blocked=True)
+
+    def _open_add_supplier(candidate) -> None:
+        """Turn a search result into a real supplier record."""
+        draft = research.draft_supplier(candidate, query=state["last_query"])
+        name_field = text_field("Supplier name", value=draft.name, expand=True)
+        website_field = text_field("Website", value=draft.website_url, expand=True)
+        notes_field = text_field("Notes", value=draft.notes, multiline=True, expand=True)
+
+        context: list[ft.Control] = [
+            ft.Text("Found on the page:", size=T.FONT_TINY, color=T.TEXT_TERTIARY),
+            ft.Text(candidate.title or candidate.url, size=T.FONT_SMALL, color=T.TEXT_SECONDARY),
+        ]
+        if candidate.snippet:
+            context.append(
+                ft.Text(candidate.snippet[:220], size=T.FONT_TINY, color=T.TEXT_TERTIARY)
+            )
+        context.append(ft.Text(
+            "The name is a guess from the website — change it if it is wrong.",
+            size=T.FONT_TINY, color=T.TEXT_TERTIARY,
+        ))
+
+        notices: list[ft.Control] = []
+        if draft.already_saved:
+            notices.append(banner(
+                f"'{draft.existing_supplier.name}' is already saved with this website. "
+                "Add anyway only if this is a genuinely different branch.",
+                "warning",
+            ))
+
+        def save(e) -> None:
+            draft.name = name_field.value or ""
+            draft.website_url = website_field.value or ""
+            draft.notes = notes_field.value or ""
+            page.pop_dialog()
+            try:
+                supplier = research.add_supplier_from_candidate(
+                    draft, force=draft.already_saved
+                )
+            except StockWiseError as exc:
+                notify_error(page, exc)
+                return
+            state["suppliers"].append(supplier)
+            candidate.supplier_id = supplier.id
+            notify(page, f"Added '{supplier.name}' to your suppliers", "success")
+            _render()
+
+        page.show_dialog(ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Save this source as a supplier"),
+            content=ft.Container(width=520, content=ft.Column(tight=True, spacing=T.GAP_SMALL, controls=[
+                *notices,
+                *context,
+                ft.Divider(height=1, color=T.BORDER_SUBTLE),
+                name_field,
+                website_field,
+                notes_field,
+            ])),
+            actions=[
+                ft.TextButton(content="Cancel", on_click=lambda e: page.pop_dialog()),
+                ft.Button(
+                    content="Add anyway" if draft.already_saved else "Add supplier",
+                    on_click=save,
+                ),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        ))
 
     def _apply_observation(obs) -> None:
-        if not suppliers:
+        options = _supplier_options()
+        if not options:
             notify(page, "Add a supplier first, then apply a fact to it", "warning")
             return
-        supplier_dd = dropdown_field(
-            "Apply to supplier", [(str(s.id), s.name) for s in suppliers],
-            value=str(suppliers[0].id), width=360,
-        )
+
+        # Prefer the supplier this fact actually came from, when we know it.
+        default = str(obs.supplier_id) if obs.supplier_id else options[0][0]
+        if obs.supplier_id and all(str(obs.supplier_id) != key for key, _ in options):
+            default = options[0][0]
+
+        supplier_dd = dropdown_field("Apply to supplier", options, value=default, width=360)
 
         def confirm(e) -> None:
             page.pop_dialog()

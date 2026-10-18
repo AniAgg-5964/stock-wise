@@ -11,9 +11,12 @@ import pytest
 from application.services.supplier_research_service import (
     SETTING_ENABLED, SupplierResearchService,
 )
-from domain.entities import Product, ProductSupplier, Supplier, SupplierObservation
+from domain.entities import (
+    ExternalSource, Product, ProductSupplier, Supplier, SupplierObservation,
+)
 from domain.exceptions import (
-    NotFoundError, ResearchNotConfiguredError, TinyFishError, ValidationError,
+    DuplicateSupplierError, NotFoundError, ResearchNotConfiguredError,
+    TinyFishError, ValidationError,
 )
 from integrations.tinyfish.schemas import FetchedPage, SearchHit
 
@@ -62,7 +65,8 @@ class FakeClient:
 def _service(ctx, client=None, **kwargs):
     return SupplierResearchService(
         ctx.external_sources, ctx.supplier_observations, ctx.suppliers, ctx.products,
-        ctx.audit, ctx.settings, client if client is not None else FakeClient(), **kwargs,
+        ctx.audit, ctx.settings, client if client is not None else FakeClient(),
+        supplier_service=ctx.supplier_service, **kwargs,
     )
 
 
@@ -71,6 +75,7 @@ def _rebind(research, client):
     return SupplierResearchService(
         research.sources, research.observations, research.suppliers, research.products,
         research.audit, research.settings, client,
+        supplier_service=research.supplier_service,
         cache_minutes=research.cache_minutes,
         max_fetches_per_action=research.max_fetches_per_action,
     )
@@ -245,6 +250,18 @@ def test_research_screens_out_a_login_wall(ctx, product):
 
 
 # ------------------------------------------------------------------ applying
+def test_raw_fetch_errors_are_explained_in_plain_english():
+    """A raw API token must never reach the user as-is."""
+    from application.services.supplier_research_service import _friendly_fetch_error
+
+    assert "refused" in _friendly_fetch_error("target_http_error")
+    assert "JavaScript" in _friendly_fetch_error("empty_content")
+    assert "no longer exists" in _friendly_fetch_error("404_not_found")
+    assert "long" in _friendly_fetch_error("request_timeout")
+    assert "resolved" in _friendly_fetch_error("dns_error")
+    assert _friendly_fetch_error("") == "the page could not be fetched"
+
+
 def _first_cost_observation(research, product_id):
     for obs in research.observations_for_product(product_id):
         if obs.field_name == "unit_cost":
@@ -416,3 +433,209 @@ def test_suppliers_view_renders_without_a_key(ctx, wired_app_context):
     view = build_view("/suppliers", _StubPage(), lambda route: None)
 
     assert isinstance(view, ft.Control)
+
+
+# ---------------------------------------------------------- supplier records
+def test_search_annotates_each_candidate_with_its_host(enabled):
+    candidates = enabled.search(query="atta")
+    assert candidates[0].host == "example.com"
+
+
+def test_draft_guesses_the_name_from_the_website(enabled):
+    candidates = enabled.search(query="atta")
+    draft = enabled.draft_supplier(candidates[0], query="atta wholesale")
+
+    assert draft.name == "Example", "name is a guess from the domain root"
+    assert draft.website_url == "https://example.com/atta"
+    assert draft.already_saved is False
+
+
+def test_draft_records_where_the_supplier_came_from(enabled):
+    candidates = enabled.search(query="atta wholesale")
+    draft = enabled.draft_supplier(candidates[0], query="atta wholesale")
+
+    assert "atta wholesale" in draft.notes
+    assert "TinyFish" in draft.notes
+    assert f"Source: {candidates[0].url}" in draft.notes
+
+
+def test_add_supplier_from_candidate_creates_a_real_record(enabled, ctx):
+    candidates = enabled.search(query="atta")
+    supplier = enabled.add_supplier_from_candidate(enabled.draft_supplier(candidates[0]))
+
+    assert supplier.id is not None
+    saved = ctx.supplier_service.get_supplier(supplier.id)
+    assert saved.name == "Example"
+    assert saved.website_url == "https://example.com/atta"
+    assert "TinyFish" in saved.notes
+
+
+def test_a_second_supplier_from_the_same_website_is_refused(enabled):
+    candidates = enabled.search(query="atta")
+    enabled.add_supplier_from_candidate(enabled.draft_supplier(candidates[0]))
+
+    draft = enabled.draft_supplier(candidates[0])
+    assert draft.already_saved is True
+
+    with pytest.raises(DuplicateSupplierError) as excinfo:
+        enabled.add_supplier_from_candidate(draft)
+    assert "already saved" in str(excinfo.value)
+
+
+def test_force_allows_a_genuine_second_branch(enabled, ctx):
+    candidates = enabled.search(query="atta")
+    first = enabled.add_supplier_from_candidate(enabled.draft_supplier(candidates[0]))
+    second = enabled.add_supplier_from_candidate(
+        enabled.draft_supplier(candidates[0]), force=True
+    )
+
+    assert first.id != second.id
+    assert len(ctx.supplier_service.list_suppliers()) == 2
+
+
+def test_a_blank_supplier_name_is_rejected(enabled):
+    candidates = enabled.search(query="atta")
+    draft = enabled.draft_supplier(candidates[0])
+    draft.name = "   "
+
+    with pytest.raises(ValidationError):
+        enabled.add_supplier_from_candidate(draft)
+
+
+def test_adding_a_supplier_from_research_is_audited(enabled, ctx):
+    candidates = enabled.search(query="atta")
+    supplier = enabled.add_supplier_from_candidate(enabled.draft_supplier(candidates[0]))
+
+    rows = ctx.db.query_all(
+        "SELECT * FROM audit_events WHERE event_type = 'supplier_added_from_research'"
+    )
+    assert rows
+    assert str(supplier.id) == str(rows[0]["entity_id"])
+
+
+def test_saved_suppliers_are_matched_by_host_not_by_exact_url(enabled, ctx):
+    # A hand-typed bare domain must still match a full-URL search result.
+    ctx.supplier_service.create_supplier(Supplier(name="Kirana", website_url="blocked.com"))
+
+    candidates = enabled.search(query="atta")
+    matched = next(c for c in candidates if c.host == "blocked.com")
+
+    assert matched.already_saved is True
+    assert matched.supplier_id is not None
+
+
+def test_failed_sources_are_reported_for_the_block_hint(ctx):
+    repo = ctx.external_sources
+    good = repo.create(ExternalSource(
+        provider="tinyfish", url="https://a.com/p", parse_status="ok",
+    ))
+    bad = repo.create(ExternalSource(
+        provider="tinyfish", url="https://b.com/p", parse_status="pending",
+    ))
+    repo.set_parse_status(bad.id, "fetch_error:the site refused the request")
+
+    assert [s.id for s in repo.list_failed_sources()] == [bad.id]
+    assert good.id not in [s.id for s in repo.list_failed_sources()]
+
+
+# ------------------------------------------------------------- block hints
+def _mixed_client() -> FakeClient:
+    """One site known to block, one independent site that serves content."""
+    return FakeClient(
+        hits=[
+            SearchHit(url="https://www.indiamart.com/proddetail/atta.html",
+                      title="Atta 10kg", site_name="indiamart.com"),
+            SearchHit(url="https://independent-trader.example/atta",
+                      title="Atta wholesale", site_name="independent-trader.example"),
+        ],
+        pages={
+            "https://independent-trader.example/atta": FetchedPage(
+                url="https://independent-trader.example/atta",
+                final_url="https://independent-trader.example/atta",
+                title="Atta wholesale", text=PAGE_TEXT,
+            ),
+        },
+    )
+
+
+def test_a_known_marketplace_is_flagged(enabled):
+    research = _rebind(enabled, _mixed_client())
+    candidates = research.search(query="atta")
+
+    flagged = next(c for c in candidates if c.host == "indiamart.com")
+    assert flagged.likely_blocked is True
+    assert "blocks" in flagged.block_reason
+
+
+def test_an_independent_supplier_site_is_not_flagged(enabled):
+    research = _rebind(enabled, _mixed_client())
+    candidates = research.search(query="atta")
+
+    clean = next(c for c in candidates if c.host == "independent-trader.example")
+    assert clean.likely_blocked is False
+    assert clean.block_reason is None
+
+
+def test_a_host_that_refused_before_is_flagged_from_real_history(enabled):
+    previous = enabled.sources.create(ExternalSource(
+        provider="tinyfish", url="https://independent-trader.example/atta",
+        parse_status="pending",
+    ))
+    enabled.sources.set_parse_status(previous.id, "fetch_error:the site refused the request")
+
+    research = _rebind(enabled, _mixed_client())
+    candidates = research.search(query="atta")
+
+    once = next(c for c in candidates if c.host == "independent-trader.example")
+    assert once.likely_blocked is True
+    assert "refused us before" in once.block_reason
+
+
+def test_a_batch_skips_blocked_sources_but_never_prevents_trying(enabled):
+    client = _mixed_client()
+    research = _rebind(enabled, client)
+    candidates = research.search(query="atta")
+
+    research.research_candidates(candidates, skip_blocked=True)
+    assert client.fetch_calls == [["https://independent-trader.example/atta"]]
+
+    research.research_candidates(candidates, skip_blocked=False)
+    assert len(client.fetch_calls) == 2, "advisory only — a manual batch may still try"
+
+
+def test_a_batch_reports_why_something_was_skipped(enabled):
+    research = _rebind(enabled, _mixed_client())
+    candidates = research.search(query="atta")
+
+    result = research.research_candidates(candidates, skip_blocked=True)
+
+    assert any("indiamart" in note for note in result.skipped)
+
+
+def test_a_batch_of_only_blocked_sources_fetches_nothing(enabled):
+    client = _mixed_client()
+    research = _rebind(enabled, client)
+    candidates = [c for c in research.search(query="atta") if c.likely_blocked]
+
+    result = research.research_candidates(candidates, skip_blocked=True)
+
+    assert client.fetch_calls == []
+    assert result.sources == []
+
+
+# ----------------------------------------------------- facts linked to a supplier
+def test_facts_are_attached_to_the_matched_supplier(enabled, ctx, product):
+    supplier = ctx.supplier_service.create_supplier(
+        Supplier(name="Example Traders", website_url="https://example.com")
+    )
+
+    candidates = enabled.search(product_id=product.id)
+    target = next(c for c in candidates if c.host == "example.com")
+
+    assert target.supplier_id == supplier.id, "matched supplier is attached"
+
+    result = enabled.research(url=target.url, product_id=product.id,
+                              supplier_id=target.supplier_id)
+
+    assert result.observations, "the canned page yields facts"
+    assert all(o.supplier_id == supplier.id for o in result.observations)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from integrations.tinyfish.source_validation import (
-    content_hash, normalise_url, screen_text, validate_url,
+    content_hash, host_of, is_known_bot_hostile, normalise_url, screen_text, validate_url,
 )
 
 GOOD_PAGE = (
@@ -88,3 +88,55 @@ def test_js_only_pages_are_rejected():
 def test_usable_result_exposes_no_detail():
     assert screen_text(GOOD_PAGE).detail is None
     assert screen_text("short").detail == "too_short"
+
+
+# ------------------------------------------------------------------ host rules
+def test_host_of_strips_scheme_www_and_port():
+    assert host_of("https://www.example.com/a/b?q=1") == "example.com"
+    assert host_of("http://EXAMPLE.com:8080/x") == "example.com"
+    assert host_of("HTTPS://WWW.Example.COM/") == "example.com"
+
+
+def test_host_of_accepts_a_bare_domain():
+    assert host_of("indiamart.com") == "indiamart.com"
+    assert host_of("  example.com/p  ") == "example.com"
+
+
+def test_host_of_nothing_is_empty():
+    assert host_of("") == ""
+    assert host_of(None) == ""
+
+
+def test_known_marketplaces_are_recognised():
+    assert is_known_bot_hostile("https://www.indiamart.com/proddetail/atta.html") is True
+    assert is_known_bot_hostile("https://amazon.in/dp/B01") is True
+    assert is_known_bot_hostile("http://tradeindia.com/x") is True
+
+
+def test_a_subdomain_of_a_known_host_is_also_matched():
+    # Subdomains of these hosts block just as reliably as the bare domain.
+    assert is_known_bot_hostile("https://in.indiamart.com/p") is True
+    assert is_known_bot_hostile("https://dir.indiamart.com/p") is True
+
+
+def test_the_hosts_that_actually_refused_us_are_covered():
+    # Regression guard: these two refused us during the live end-to-end check, so
+    # shipping without them would mean silently wasting the user's fetch budget.
+    assert is_known_bot_hostile("https://www.indiamart.com/proddetail/x.html") is True
+    assert is_known_bot_hostile("https://www.tradeindia.com/p") is True
+
+
+def test_independent_supplier_sites_are_not_flagged():
+    assert is_known_bot_hostile("https://shrihtrading.com/p") is False
+    assert is_known_bot_hostile("https://mykirana.example/atta") is False
+    assert is_known_bot_hostile("https://indiamart.com.evil.test/p") is False
+
+
+def test_a_similar_looking_domain_is_not_matched_by_suffix_alone():
+    assert is_known_bot_hostile("notindiamart.com") is False
+    assert is_known_bot_hostile("fakeamazon.in") is False
+
+
+def test_nothing_is_flagged_without_a_host():
+    assert is_known_bot_hostile("") is False
+    assert is_known_bot_hostile(None) is False
