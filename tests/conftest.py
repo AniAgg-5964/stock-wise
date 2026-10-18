@@ -113,7 +113,7 @@ def ctx(tmp_path):
         report_service=report_service,
         tinyfish_client=tinyfish_client,
         research_service=research_service,
-        backup_service=BackupService(db),
+        backup_service=BackupService(db, forecast_service),
         dashboard_service=DashboardService(product_service, inventory_service, sales_repo),
     )
 

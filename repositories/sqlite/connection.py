@@ -2,7 +2,7 @@
 
 A small connection factory. Each ``get_connection()`` yields a connection with row
 access by name, foreign keys enforced, and WAL journal mode, so callers get safe,
-well-configured connections without sharing a single global handle.
+well-configured connections without having to know the configuration.
 
 **Connection reuse.** Opening a connection is cheap; the *first query* on a cold
 connection is not. SQLite keeps no page cache between connections, so every
@@ -39,7 +39,11 @@ class DatabaseConnection:
         # only needs asserting once. Re-asserting it takes a file lock every time.
         # `foreign_keys` is per-connection and must still be set on each one.
         self._journal_mode_set = False
-        self._local = threading.local()
+        # Cached handles keyed by thread id. Reuse is per thread, but the registry
+        # is central so `close_all()` can drop every one of them - needed when the
+        # database file is replaced underneath a running app.
+        self._lock = threading.Lock()
+        self._connections: dict[int, sqlite3.Connection] = {}
 
     def _configure(self, conn: sqlite3.Connection) -> None:
         conn.row_factory = sqlite3.Row
@@ -50,23 +54,42 @@ class DatabaseConnection:
 
     def _thread_connection(self) -> sqlite3.Connection:
         """This thread's long-lived connection, created on first use."""
-        conn = getattr(self._local, "conn", None)
-        if conn is None:
-            # check_same_thread is safe to relax because the connection is stored in
-            # thread-local storage and so is only ever touched by its own thread.
-            conn = sqlite3.connect(str(self.db_path), timeout=30, check_same_thread=False)
-            self._configure(conn)
-            self._local.conn = conn
-        return conn
+        key = threading.get_ident()
+        with self._lock:
+            conn = self._connections.get(key)
+            if conn is None:
+                # check_same_thread is safe to relax because a connection is only
+                # ever handed back to the thread registered as its owner.
+                conn = sqlite3.connect(str(self.db_path), timeout=30, check_same_thread=False)
+                self._configure(conn)
+                self._connections[key] = conn
+            return conn
 
     def close(self) -> None:
         """Close this thread's cached connection, if any."""
-        conn = getattr(self._local, "conn", None)
+        with self._lock:
+            conn = self._connections.pop(threading.get_ident(), None)
         if conn is not None:
+            conn.close()
+
+    def close_all(self) -> None:
+        """Close every cached connection, on every thread.
+
+        Required whenever the database file is replaced underneath a running app
+        (backup restore). A live connection answers from its own page cache, so
+        without this the restore would report success while the app kept showing
+        pre-restore data. Also clears the journal-mode flag, because the next
+        connection may be opening a different file.
+        """
+        with self._lock:
+            connections = list(self._connections.values())
+            self._connections.clear()
+            self._journal_mode_set = False
+        for conn in connections:
             try:
                 conn.close()
-            finally:
-                self._local.conn = None
+            except sqlite3.Error:  # pragma: no cover - handle already gone
+                pass
 
     @contextmanager
     def get_connection(self) -> Iterator[sqlite3.Connection]:

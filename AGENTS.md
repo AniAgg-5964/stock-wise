@@ -136,3 +136,8 @@ than assuming older 0.x APIs. Specifics already hit:
   down to nested repository calls — a nested *fresh* connection during an open
   write transaction would deadlock. Cold connections measured ~20ms for their first
   query here versus ~0.4ms warm, so this is the single biggest performance lever.
+  Anything that **replaces the database file** must call `close_all()` first (only
+  `BackupService.restore_backup` does): a live connection keeps answering from its
+  own page cache, so without it the restore reports success while the app carries
+  on showing pre-restore data. A restore also has to call
+  `forecast_service.invalidate_demand_cache()`, because it rewrites `daily_demand`.

@@ -140,6 +140,46 @@ class TestReuseMode:
             pass
         assert second is not first, "close() must force a fresh connection"
 
+    def test_close_all_releases_every_threads_connection(self, pooled):
+        # Hold the connections themselves, not their ids: once close_all() drops
+        # them, CPython recycles the addresses and id() comparison is meaningless.
+        seen: list = []
+        barrier = threading.Barrier(3)
+
+        def worker() -> None:
+            with pooled.get_connection() as conn:
+                seen.append(conn)
+                barrier.wait(timeout=10)
+
+        threads = [threading.Thread(target=worker) for _ in range(2)]
+        for thread in threads:
+            thread.start()
+        with pooled.get_connection() as mine:
+            seen.append(mine)
+            barrier.wait(timeout=10)
+        for thread in threads:
+            thread.join(timeout=15)
+
+        pooled.close_all()
+        with pooled.get_connection() as after:
+            pass
+        assert after not in seen, "close_all() must drop every cached handle"
+
+    def test_close_all_forces_wal_to_be_reasserted(self, pooled):
+        with pooled.get_connection():
+            pass
+        assert pooled._journal_mode_set is True
+        pooled.close_all()
+        assert pooled._journal_mode_set is False
+        with pooled.get_connection() as conn:
+            assert conn.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+
+    def test_close_all_is_safe_when_nothing_is_open(self, pooled):
+        pooled.close_all()
+        pooled.close_all()
+        with pooled.get_connection() as conn:
+            assert conn.execute("SELECT 1").fetchone()[0] == 1
+
     def test_the_database_can_be_deleted_after_close(self, pooled):
         """Windows refuses to delete an open file, so close() has to really close."""
         temp_dir = tempfile.mkdtemp()
