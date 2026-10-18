@@ -66,29 +66,35 @@ def styled_table(
     labels: list[str],
     rows: list[ft.DataRow],
     *,
-    column_spacing: int = 20,
+    column_spacing: int = 22,
     empty_message: str = "No records",
 ) -> ft.Control:
-    """Build a themed DataTable, or an empty message when there are no rows."""
+    """Build a themed DataTable, or an empty message when there are no rows.
+
+    Rows are given more height and padding than a default table: the app is read
+    on a shop counter, not scanned on a data-entry desk. Column headings stay
+    uppercase but are no longer shrunk to 11px.
+    """
     if not rows:
         return ft.Container(
             padding=T.CARD_PADDING,
             alignment=ft.Alignment.CENTER,
-            content=ft.Text(empty_message, size=T.FONT_SMALL, color=T.TEXT_TERTIARY),
+            content=ft.Text(empty_message, size=T.FONT_BODY, color=T.TEXT_TERTIARY),
         )
     table = ft.DataTable(
-        columns=[ft.DataColumn(label=ft.Text(lbl.upper(), size=T.FONT_TINY, weight=ft.FontWeight.W_600,
+        columns=[ft.DataColumn(label=ft.Text(lbl.upper(), size=T.FONT_TINY,
+                                             weight=ft.FontWeight.W_600,
                                              color=T.TEXT_TERTIARY)) for lbl in labels],
         rows=rows,
         heading_row_color=T.BG_INPUT,
-        heading_row_height=44,
+        heading_row_height=46,
         border=ft.Border.all(1, T.BORDER_SUBTLE),
         border_radius=T.RADIUS_SMALL,
         horizontal_lines=ft.BorderSide(1, T.BORDER_SUBTLE),
         divider_thickness=0,
         column_spacing=column_spacing,
-        data_row_min_height=46,
-        data_row_max_height=64,
-        data_row_color={ft.ControlState.HOVERED: ft.Colors.with_opacity(0.06, T.PRIMARY)},
+        data_row_min_height=52,
+        data_row_max_height=72,
+        data_row_color={ft.ControlState.HOVERED: ft.Colors.with_opacity(0.07, T.PRIMARY)},
     )
     return ft.Row([table], scroll=ft.ScrollMode.AUTO)

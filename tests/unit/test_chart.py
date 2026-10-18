@@ -1,0 +1,146 @@
+"""Tests for the dependency-free chart geometry.
+
+``area_chart`` is assembled from plain Flet containers, so the only thing that
+determines whether the line looks smooth or broken is the arithmetic behind the
+slices. These tests pin that arithmetic directly.
+
+The original defect: linear interpolation with four samples per segment plus a
+border on the top of every slice, which rendered a notched staircase. A jumpy
+series is used on purpose - smooth rendering of a gentle series proves nothing.
+"""
+
+from __future__ import annotations
+
+import flet as ft
+
+from ui.components.chart import (
+    _MAX_SLICES,
+    _curve_pixels,
+    _interpolate,
+    _sample_steps,
+    area_chart,
+    bar_chart,
+)
+
+# Deliberately spiky: flat ramps would hide a stepped curve.
+SPIKY = [5.0, 40.0, 6.0, 35.0, 5.0, 45.0, 4.0]
+
+PLOT_HEIGHT = 200
+
+
+def _walk(control: ft.Control, depth: int = 0):
+    yield control
+    if depth > 60:  # pragma: no cover - defensive
+        return
+    for attr in ("controls", "content"):
+        children = getattr(control, attr, None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                if isinstance(child, ft.Control):
+                    yield from _walk(child, depth + 1)
+        elif isinstance(children, ft.Control):
+            yield from _walk(children, depth + 1)
+
+
+def test_the_line_is_a_ribbon_not_a_per_slice_border():
+    """The other half of the "broken" chart: a border on the top of every slice
+    put a visible notch at every column boundary. The line is now one
+    constant-thickness ribbon laid over the fill, so nothing in the plot should
+    carry a border at all."""
+    chart = area_chart([1.0, 5.0, 2.0, 6.0, 3.0], labels=["a", "b", "c", "d", "e"])
+    bordered = [
+        c for c in _walk(chart)
+        if isinstance(c, ft.Container) and c.border and getattr(c.border, "top", None)
+    ]
+    assert not bordered, f"{len(bordered)} containers still draw a border inside the chart"
+
+
+def test_both_charts_build_with_a_forecast_split():
+    for build in (area_chart, bar_chart):
+        control = build([1.0, 4.0, 2.0, 5.0], ["a", "b", "c", "d"], forecast_from=2)
+        assert isinstance(control, ft.Control)
+
+
+def test_empty_series_shows_a_message_not_a_broken_chart():
+    for build in (area_chart, bar_chart):
+        control = build([], [])
+        assert any(isinstance(n, ft.Text) for n in _walk(control))
+
+
+def _pixels(values, *, plot_height=PLOT_HEIGHT):
+    steps = _sample_steps(len(values))
+    smooth = _interpolate(values, steps)
+    peak = max(smooth) * 1.15 if smooth else 1.0
+    return _curve_pixels(smooth, plot_height, peak)
+
+
+def test_adjacent_columns_differ_by_at_most_a_few_pixels():
+    """The property that makes the curve read as a line rather than a staircase.
+
+    On a chart ~600px wide with ~220 columns each column is under 3px, so a
+    double-digit change across it is a steep slope - continuous, not a step. The
+    removed per-slice border, which put a notch at every single column, was the
+    other half of the "broken" look and is pinned separately below.
+    """
+    pixels = _pixels(SPIKY)
+    jumps = [abs(b - a) for a, b in zip(pixels, pixels[1:])]
+    assert max(jumps) <= PLOT_HEIGHT // 10, (
+        f"largest step between adjacent columns was {max(jumps)}px, "
+        f"more than a tenth of the {PLOT_HEIGHT}px plot"
+    )
+
+
+def test_the_curve_reaches_every_data_point():
+    """Resampling must not flatten the peaks it passes through."""
+    pixels = _pixels(SPIKY)
+    peak = max(pixels)
+    assert peak >= PLOT_HEIGHT * 0.8, "the tallest point should reach near the top"
+    assert min(pixels) <= PLOT_HEIGHT * 0.15, "the shortest point should stay near the bottom"
+
+
+def test_the_curve_starts_and_ends_on_the_real_values():
+    values = SPIKY
+    pixels = _pixels(values)
+    first = max(pixels) * values[0] / max(values)
+    last = max(pixels) * values[-1] / max(values)
+    assert abs(pixels[0] - first) <= PLOT_HEIGHT * 0.05
+    assert abs(pixels[-1] - last) <= PLOT_HEIGHT * 0.05
+
+
+def test_a_flat_series_renders_flat_without_dividing_by_zero():
+    """A level series must not collapse or raise: the chart reserves headroom, so
+    the answer is a constant height below the plot top, not the plot height."""
+    pixels = _pixels([3.0, 3.0, 3.0])
+    assert len(set(pixels)) == 1, f"expected one flat height, got {set(pixels)}"
+    assert pixels[0] == max(1, round(PLOT_HEIGHT / 1.15))
+
+
+def test_slice_count_stays_bounded_for_long_series():
+    """Each slice is ~3 Flutter controls, so the chart must not oversample a long
+    series into thousands of nodes and undo the render time we won back."""
+    for count in (7, 21, 90, 400, 2000):
+        slices = len(_interpolate([1.0] * count, _sample_steps(count)))
+        # One column per data point is the floor: a series cannot be drawn with
+        # fewer columns than it has points.
+        assert slices <= max(count, _MAX_SLICES + 1), (
+            f"{count} points rendered as {slices} slices"
+        )
+
+
+def test_short_series_still_gets_smooth_sampling():
+    assert _sample_steps(2) >= 2
+    assert _sample_steps(21) >= 2
+
+
+def test_interpolation_passes_through_every_data_point():
+    steps = 8
+    values = [1.0, 5.0, 2.0, 8.0]
+    smooth = _interpolate(values, steps)
+    # Every original value should appear somewhere in the sampled curve.
+    for value in values:
+        assert any(abs(s - value) < 0.05 for s in smooth), f"{value} was skipped"
+
+
+def test_single_point_series_is_safe():
+    assert _interpolate([7.0], 8) == [7.0]
+    assert _interpolate([], 8) == []

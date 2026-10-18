@@ -17,7 +17,7 @@ import flet as ft
 
 from app.bootstrap import app_context
 from app.config import Config
-from app.navigation import build_sidebar
+from app.navigation import build_sidebar, shop_name
 from app.theme import StockWiseTheme as T
 from ui.components.forms import search_field
 from ui.components.status_chip import status_chip
@@ -41,6 +41,9 @@ def main(page: ft.Page) -> None:
     _restore_theme_preference(page)
 
     # --- Configure window / page ---
+    # Bundled fonts (Mukta: Latin + Devanagari). Loaded from the assets dir so the
+    # app renders identically offline, with no network font fetch.
+    page.fonts = dict(T.FONT_FILES)
     page.title = f"{Config.APP_NAME} \u2014 {Config.APP_TAGLINE}"
     page.theme = T.get_flet_theme()
     page.theme_mode = ft.ThemeMode.DARK if T.is_dark() else ft.ThemeMode.LIGHT
@@ -214,12 +217,12 @@ def main(page: ft.Page) -> None:
 
         search = search_field(
             "Search products, categories\u2026",
-            width=380,
+            width=420,
             on_change=on_search,
         )
 
         return ft.Container(
-            padding=ft.Padding.symmetric(horizontal=T.CONTENT_PADDING, vertical=11),
+            padding=ft.Padding.symmetric(horizontal=T.CONTENT_PADDING, vertical=13),
             bgcolor=T.TOPBAR_BG,
             border=ft.Border.only(bottom=ft.BorderSide(1, T.TOPBAR_BORDER)),
             content=ft.Row(
@@ -239,26 +242,41 @@ def main(page: ft.Page) -> None:
                     ),
                     ft.Container(
                         content=bell,
-                        padding=ft.Padding.only(right=6),
+                        padding=ft.Padding.only(right=10),
                     ),
-                    ft.Container(width=1, height=26, bgcolor=T.BORDER),
+                    ft.Container(width=1, height=28, bgcolor=T.BORDER_SUBTLE),
                     ft.Container(width=10),
-                    ft.Row(
-                        spacing=9,
-                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                        controls=[
-                            ft.Container(
-                                width=34, height=34, border_radius=17, bgcolor=T.PRIMARY,
-                                alignment=ft.Alignment.CENTER,
-                                content=ft.Text("A", size=T.FONT_BODY, weight=ft.FontWeight.BOLD,
-                                                color=T.TEXT_ON_PRIMARY),
-                            ),
-                            ft.Column(spacing=0, controls=[
-                                ft.Text("Admin", size=T.FONT_BODY, weight=ft.FontWeight.W_600,
-                                        color=T.TEXT_PRIMARY),
-                                ft.Text("Store owner", size=T.FONT_TINY, color=T.TEXT_TERTIARY),
-                            ]),
-                        ],
+                    # Shop identity rather than a generic user avatar: this is a
+                    # single-store app, so this is the shop, not a login account.
+                    ft.Container(
+                        padding=ft.Padding.symmetric(horizontal=10, vertical=6),
+                        border_radius=T.RADIUS_SMALL,
+                        bgcolor=T.BG_HOVER,
+                        content=ft.Row(
+                            spacing=10,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                            controls=[
+                                ft.Container(
+                                    width=36,
+                                    height=36,
+                                    border_radius=18,
+                                    bgcolor=T.PRIMARY,
+                                    alignment=ft.Alignment.CENTER,
+                                    content=ft.Icon(ft.Icons.STORE_OUTLINED, size=18,
+                                                    color=T.TEXT_ON_PRIMARY),
+                                ),
+                                ft.Column(
+                                    spacing=0,
+                                    controls=[
+                                        ft.Text(shop_name(), size=T.FONT_SMALL,
+                                                weight=ft.FontWeight.W_600,
+                                                color=T.TEXT_PRIMARY, no_wrap=True),
+                                        ft.Text("Store owner", size=T.FONT_TINY,
+                                                color=T.TEXT_TERTIARY),
+                                    ],
+                                ),
+                            ],
+                        ),
                     ),
                 ],
             ),
@@ -372,4 +390,5 @@ def _persist_theme_preference(page: ft.Page, mode: str) -> None:
 
 
 if __name__ == "__main__":
-    ft.run(main)
+    # ``assets_dir`` is what makes page.fonts paths such as "/fonts/…ttf" resolve.
+    ft.run(main, assets_dir=str(Config.ASSETS_DIR))

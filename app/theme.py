@@ -4,13 +4,26 @@ Single source of truth for the look and feel: colours, spacing, radii, typograph
 and status semantics. UI code imports ``StockWiseTheme as T`` and never hard-codes
 raw hex values.
 
-Two palettes are maintained — **light** (default, matching the product mockups:
-light page, white cards, dark-navy sidebar) and **dark**. ``T.apply("dark")``
+**Look and feel.** The app is for a neighbourhood shopkeeper, so the palette is
+warm rather than clinical: a deep forest green for the brand, a cream page, and a
+yellow accent used sparingly. Green signals *fresh stock, all good*; the cream
+background keeps long reading sessions easy on the eyes. Every status colour is
+warm-shifted to match instead of sitting on top of the warm ground as pure hues.
+
+Two palettes are maintained — **light** (default) and **dark**. ``T.apply("dark")``
 switches the active palette in place; every view reads ``T.*`` at build time, so a
 re-render picks up the change. Token *names* never change between palettes.
 
 Colour semantics: red = urgent, amber = warning, green = healthy, neutral = normal
 information. Colour is always paired with a text label.
+
+**Fonts.** ``Mukta`` (SIL Open Font License, bundled in ``assets/fonts``) is
+loaded through ``page.fonts``. It was chosen because it covers both Latin and
+Devanagari in one family, so English and Hindi need no fallback chain, and it
+stays legible at the small sizes a dense data table needs. Flet 1.0 only supports
+*static* font files, so the two weights are registered as two family names;
+``FONT_FAMILY_BOLD`` is applied to large display text where synthetic bold would
+otherwise look thin.
 """
 
 from __future__ import annotations
@@ -21,119 +34,136 @@ import flet as ft
 class StockWiseTheme:
     # ------------------------------------------------------------------ palettes
     _LIGHT: dict[str, str] = {
-        # Surfaces
-        "PAGE_BG": "#F4F6FB",
-        "BG_DARKEST": "#0F172A",
-        "BG_DARK": "#0F172A",
+        # Surfaces — warm, slightly creamy rather than clinical grey
+        "PAGE_BG": "#F7F5EF",
+        "BG_DARKEST": "#14261E",
+        "BG_DARK": "#14261E",
         "BG_CARD": "#FFFFFF",
-        "BG_INPUT": "#F1F5F9",
-        "BG_HOVER": "#F6F8FC",
-        "BORDER": "#E3E8F0",
-        "BORDER_SUBTLE": "#EEF2F7",
-        # Brand
-        "PRIMARY": "#2563EB",
-        "PRIMARY_HOVER": "#1D4ED8",
-        "PRIMARY_SUBTLE": "#E8EFFE",
-        "PRIMARY_TINT": "#E8F0FE",
-        "ACCENT": "#7C3AED",
+        "BG_INPUT": "#F2EFE7",
+        "BG_HOVER": "#FAF8F2",
+        "BORDER": "#E7E2D6",
+        "BORDER_SUBTLE": "#F0ECE2",
+        # Brand — deep forest green
+        "PRIMARY": "#0B6B3A",
+        "PRIMARY_HOVER": "#085530",
+        "PRIMARY_SUBTLE": "#E4F0E8",
+        "PRIMARY_TINT": "#EAF4EE",
+        # Accent — warm yellow, used sparingly (badges, highlights, never body text)
+        "ACCENT": "#F2B035",
+        "ACCENT_TEXT": "#8A5A00",
+        "TINT_ACCENT": "#FCF2DC",
         # Text
-        "TEXT_PRIMARY": "#0F172A",
-        "TEXT_SECONDARY": "#64748B",
-        "TEXT_TERTIARY": "#94A3B8",
+        "TEXT_PRIMARY": "#14261E",
+        "TEXT_SECONDARY": "#5D6B62",
+        "TEXT_TERTIARY": "#93A099",
         "TEXT_ON_PRIMARY": "#FFFFFF",
         # Status
-        "STATUS_HEALTHY": "#16A34A",
-        "STATUS_WARNING": "#D97706",
-        "STATUS_CRITICAL": "#DC2626",
-        "STATUS_INFO": "#2563EB",
-        "STATUS_NEUTRAL": "#64748B",
+        "STATUS_HEALTHY": "#1E8E4E",
+        "STATUS_WARNING": "#D98324",
+        "STATUS_CRITICAL": "#C6372D",
+        "STATUS_INFO": "#1F6F8B",
+        "STATUS_NEUTRAL": "#6B7A72",
         # Pastel status tints (chip / tile backgrounds)
-        "TINT_HEALTHY": "#E7F6EC",
-        "TINT_WARNING": "#FEF3E2",
-        "TINT_CRITICAL": "#FDEAEA",
-        "TINT_INFO": "#E8F0FE",
-        "TINT_NEUTRAL": "#EEF2F7",
-        # Sidebar (dark navy in both modes)
-        "SIDEBAR_BG": "#0F172A",
-        "SIDEBAR_TEXT": "#94A3B8",
+        "TINT_HEALTHY": "#E6F3EA",
+        "TINT_WARNING": "#FCF0E0",
+        "TINT_CRITICAL": "#FBE9E7",
+        "TINT_INFO": "#E7F1F5",
+        "TINT_NEUTRAL": "#F0EEE8",
+        # Sidebar — deep green, the one place the brand colour goes full strength
+        "SIDEBAR_BG": "#0A4F2E",
+        "SIDEBAR_TEXT": "#A8CDB6",
         "SIDEBAR_TEXT_ACTIVE": "#FFFFFF",
-        "SIDEBAR_ACTIVE_BG": "#2563EB",
-        "SIDEBAR_HOVER_BG": "#1E293B",
-        "SIDEBAR_BORDER": "#1E293B",
-        "SIDEBAR_MUTED": "#64748B",
-        "SIDEBAR_CARD_BG": "#1E293B",
+        "SIDEBAR_ACTIVE_BG": "#157A4A",
+        "SIDEBAR_HOVER_BG": "#0E5D39",
+        "SIDEBAR_BORDER": "#0E5D39",
+        "SIDEBAR_MUTED": "#86B79D",
+        "SIDEBAR_CARD_BG": "#0E5D39",
         # Top bar
         "TOPBAR_BG": "#FFFFFF",
-        "TOPBAR_BORDER": "#E8EDF5",
-        "SHADOW": "#0F172A14",
+        "TOPBAR_BORDER": "#EDE8DC",
+        "SHADOW": "#14261E14",
     }
 
     _DARK: dict[str, str] = {
-        "PAGE_BG": "#0B0F1A",
-        "BG_DARKEST": "#0B0F1A",
-        "BG_DARK": "#111827",
-        "BG_CARD": "#151B2B",
-        "BG_INPUT": "#1B2233",
-        "BG_HOVER": "#1F2940",
-        "BORDER": "#262E44",
-        "BORDER_SUBTLE": "#1C2335",
-        "PRIMARY": "#6366F1",
-        "PRIMARY_HOVER": "#4F46E5",
-        "PRIMARY_SUBTLE": "#312E81",
-        "PRIMARY_TINT": "#1E2743",
-        "ACCENT": "#8B5CF6",
-        "TEXT_PRIMARY": "#E5E7EB",
-        "TEXT_SECONDARY": "#9CA3AF",
-        "TEXT_TERTIARY": "#6B7280",
-        "TEXT_ON_PRIMARY": "#FFFFFF",
-        "STATUS_HEALTHY": "#22C55E",
-        "STATUS_WARNING": "#F59E0B",
-        "STATUS_CRITICAL": "#EF4444",
-        "STATUS_INFO": "#3B82F6",
-        "STATUS_NEUTRAL": "#6B7280",
-        "TINT_HEALTHY": "#132A1C",
-        "TINT_WARNING": "#2A2213",
-        "TINT_CRITICAL": "#2A1516",
-        "TINT_INFO": "#152238",
-        "TINT_NEUTRAL": "#1C2335",
-        "SIDEBAR_BG": "#0B0F1A",
-        "SIDEBAR_TEXT": "#9CA3AF",
+        "PAGE_BG": "#0E1512",
+        "BG_DARKEST": "#0A100D",
+        "BG_DARK": "#131C17",
+        "BG_CARD": "#16211B",
+        "BG_INPUT": "#1D2A22",
+        "BG_HOVER": "#1E2C24",
+        "BORDER": "#26362C",
+        "BORDER_SUBTLE": "#1F2C25",
+        "PRIMARY": "#35C46F",
+        "PRIMARY_HOVER": "#46D67F",
+        "PRIMARY_SUBTLE": "#173A26",
+        "PRIMARY_TINT": "#1A3325",
+        "ACCENT": "#F5C242",
+        "ACCENT_TEXT": "#F5C242",
+        "TINT_ACCENT": "#3A2F14",
+        "TEXT_PRIMARY": "#E8EFEA",
+        "TEXT_SECONDARY": "#A3B3A9",
+        "TEXT_TERTIARY": "#6E7F75",
+        "TEXT_ON_PRIMARY": "#0A100D",
+        "STATUS_HEALTHY": "#35C46F",
+        "STATUS_WARNING": "#E9A23B",
+        "STATUS_CRITICAL": "#E8695C",
+        "STATUS_INFO": "#5AA9C4",
+        "STATUS_NEUTRAL": "#6E7F75",
+        "TINT_HEALTHY": "#15301F",
+        "TINT_WARNING": "#33260F",
+        "TINT_CRITICAL": "#33191A",
+        "TINT_INFO": "#152C36",
+        "TINT_NEUTRAL": "#1F2C25",
+        "SIDEBAR_BG": "#0A100D",
+        "SIDEBAR_TEXT": "#7FA892",
         "SIDEBAR_TEXT_ACTIVE": "#FFFFFF",
-        "SIDEBAR_ACTIVE_BG": "#312E81",
-        "SIDEBAR_HOVER_BG": "#151B2B",
-        "SIDEBAR_BORDER": "#1C2335",
-        "SIDEBAR_MUTED": "#6B7280",
-        "SIDEBAR_CARD_BG": "#151B2B",
-        "TOPBAR_BG": "#0B0F1A",
-        "TOPBAR_BORDER": "#1C2335",
+        "SIDEBAR_ACTIVE_BG": "#17402A",
+        "SIDEBAR_HOVER_BG": "#12291D",
+        "SIDEBAR_BORDER": "#142B1F",
+        "SIDEBAR_MUTED": "#5E8570",
+        "SIDEBAR_CARD_BG": "#12291D",
+        "TOPBAR_BG": "#0E1512",
+        "TOPBAR_BORDER": "#1F2C25",
         "SHADOW": "#00000000",
     }
 
     # ------------------------------------------------- shared (palette-independent)
     mode: str = "light"
 
-    # Spacing / radii
-    CONTENT_PADDING = 24
-    CARD_PADDING = 20
-    GAP = 16
-    GAP_SMALL = 8
-    GAP_TINY = 4
-    RADIUS = 14
-    RADIUS_SMALL = 10
-    INPUT_RADIUS = 10
-    CHIP_RADIUS = 8
-    SIDEBAR_WIDTH = 236
-    SIDEBAR_WIDTH_COLLAPSED = 78
-    TOPBAR_HEIGHT = 64
+    # Bundled fonts (see module docstring). Two family names because Flet 1.0
+    # registers one static file per family name.
+    FONT_FAMILY = "Mukta"
+    FONT_FAMILY_BOLD = "Mukta SemiBold"
 
-    # Typography (px)
-    FONT_HERO = 26
-    FONT_DISPLAY = 28
-    FONT_TITLE = 22
-    FONT_SUBTITLE = 16
-    FONT_BODY = 14
-    FONT_SMALL = 12
-    FONT_TINY = 11
+    #: Fonts served from ``assets/fonts``; loaded into ``page.fonts`` at startup.
+    FONT_FILES: dict[str, str] = {
+        "Mukta": "/fonts/Mukta-Regular.ttf",
+        "Mukta SemiBold": "/fonts/Mukta-SemiBold.ttf",
+    }
+
+    # Spacing / radii — roomier than a typical admin dashboard
+    CONTENT_PADDING = 28
+    CARD_PADDING = 22
+    GAP = 18
+    GAP_SMALL = 10
+    GAP_TINY = 6
+    RADIUS = 18
+    RADIUS_SMALL = 12
+    INPUT_RADIUS = 12
+    CHIP_RADIUS = 12  # pill: the chip is ~22px tall, so this is effectively round
+    SIDEBAR_WIDTH = 248
+    SIDEBAR_WIDTH_COLLAPSED = 80
+    TOPBAR_HEIGHT = 68
+
+    # Typography (px) — larger than before: the old 11px micro-labels were the
+    # single biggest reason the app read as cramped and hard to scan.
+    FONT_HERO = 30
+    FONT_DISPLAY = 32
+    FONT_TITLE = 24
+    FONT_SUBTITLE = 17
+    FONT_BODY = 15
+    FONT_SMALL = 13
+    FONT_TINY = 12
 
     # ------------------------------------------------------------- palette switching
     @classmethod
@@ -200,15 +230,26 @@ class StockWiseTheme:
 
     @classmethod
     def shadow(cls) -> list[ft.BoxShadow] | None:
-        """A soft card shadow (a no-op in dark mode)."""
+        """A soft, warm card shadow (a no-op in dark mode).
+
+        Wider blur and a warmer tint than a neutral grey shadow: on a cream page
+        a grey shadow reads as dirt.
+        """
         if cls.is_dark():
-            return None
+            return [
+                ft.BoxShadow(
+                    blur_radius=24,
+                    spread_radius=0,
+                    color=ft.Colors.with_opacity(0.30, "#000000"),
+                    offset=ft.Offset(0, 6),
+                )
+            ]
         return [
             ft.BoxShadow(
-                blur_radius=18,
+                blur_radius=24,
                 spread_radius=0,
                 color=cls.SHADOW,
-                offset=ft.Offset(0, 4),
+                offset=ft.Offset(0, 6),
             )
         ]
 
@@ -223,6 +264,7 @@ class StockWiseTheme:
 
         return {
             ft.ControlState.DEFAULT: outline(cls.BORDER),
+            ft.ControlState.HOVERED: outline(cls.TEXT_TERTIARY),
             ft.ControlState.FOCUSED: outline(cls.PRIMARY),
         }
 
@@ -231,6 +273,7 @@ class StockWiseTheme:
         """Build the Flet ``Theme`` for the active palette."""
         return ft.Theme(
             color_scheme_seed=cls.PRIMARY,
+            font_family=cls.FONT_FAMILY,
             color_scheme=ft.ColorScheme(
                 primary=cls.PRIMARY,
                 on_primary=cls.TEXT_ON_PRIMARY,

@@ -17,11 +17,12 @@ def status_chip(label: str, status: str = "info", *, icon: str | None = None) ->
     tint = T.tint_for(status)
     controls: list[ft.Control] = []
     if icon:
-        controls.append(ft.Icon(icon, size=13, color=color))
+        controls.append(ft.Icon(icon, size=14, color=color))
     controls.append(ft.Text(label, size=T.FONT_TINY, color=color, weight=ft.FontWeight.W_600))
     return ft.Container(
-        padding=ft.Padding.symmetric(horizontal=10, vertical=4),
+        padding=ft.Padding.symmetric(horizontal=11, vertical=5),
         border_radius=T.CHIP_RADIUS,
         bgcolor=tint,
-        content=ft.Row(spacing=5, tight=True, controls=controls),
+        content=ft.Row(spacing=5, tight=True, vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                       controls=controls),
     )

@@ -110,6 +110,27 @@ than assuming older 0.x APIs. Specifics already hit:
 - Input borders: pass `border=ft.OutlineInputBorder(border_radius=..., side=ft.BorderSide(...))`
   or a `{ControlState: OutlineInputBorder}` dict. `TextField.border_radius` and
   `Dropdown.focused_border_color` are deprecated.
+- Custom fonts: `page.fonts` values are paths served from the **assets dir**, so
+  `ft.run` must pass `assets_dir` (`main.py` does, and `StockWise.spec` bundles
+  `assets`). Flet 1.0 supports only *static* fonts, so each weight is registered as
+  its own family name — `T.FONT_FAMILY` and `T.FONT_FAMILY_BOLD`. Bold text using a
+  family that lacks that weight gets *synthetic* bold, which looks thin at display
+  sizes, so large headings set `font_family=T.FONT_FAMILY_BOLD` with `W_400`.
+- MUI-free charting stays dependency-free (`ui/components/chart.py`). Two rules keep
+  the line looking like a line: never put a border on a slice (it notches the top edge
+  at every column), and keep `_MAX_SLICES` bounded — each slice is ~3 Flutter controls
+  and the chart is rebuilt on every dashboard render.
+
+## Layout budgets (measured, not guessed)
+
+- A 4-up KPI row on the smallest supported window (1366px) leaves **208px** of text
+  width per card: `1366 - sidebar 248 - 2*content padding 28 - 3*grid gap 18 - 2*card
+  padding 22`. The KPI icon deliberately sits on the *label* row rather than beside
+  the number, because with a 40px tile beside it only ~156px remained and no display
+  size could fit `₹1,23,456.00`. `kpi_card.value_fits()` guards this; the sizing
+  ladder in `_value_size` is what keeps money on one line (the card is `no_wrap`, so
+  an over-long value is clipped, never wrapped).
+
 
 ## Gotchas
 

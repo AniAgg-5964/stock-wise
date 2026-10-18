@@ -11,7 +11,7 @@ import flet as ft
 from app.theme import StockWiseTheme as T
 from application.services.supplier_research_service import SourceCandidate
 from domain.money import format_money
-from ui.components.kpi_card import _value_size, kpi_card
+from ui.components.kpi_card import _value_size, kpi_card, value_fits
 from ui.views.supplier_research_panel import _confidence_color, _site_cell
 
 
@@ -47,6 +47,25 @@ def test_value_size_shrinks_for_longer_strings():
 def test_short_values_keep_the_display_size():
     assert _value_size("15") == T.FONT_DISPLAY
     assert _value_size(format_money(29209)) == T.FONT_DISPLAY
+
+
+def test_realistic_money_values_fit_a_four_up_card():
+    """The actual requirement behind the sizing ladder.
+
+    The card is no_wrap, so a value that does not fit is clipped, not wrapped.
+    This was checked against the old layout, where a 40px icon tile beside the
+    number left only ~156px and made 32px impossible.
+    """
+    for amount in (0, 15, 999, 29209, 123456, 1234567, 12345678, 99999999):
+        value = format_money(amount)
+        assert value_fits(value), f"{value!r} needs more than the card width"
+
+
+def test_even_an_oversized_value_does_not_grow_the_font():
+    """Sanity: the ladder is monotonic, so a pathological string cannot ask for a
+    *larger* font than a short one."""
+    sizes = [_value_size(s) for s in ("1", "1234567890", "₹1,23,45,678.90", "x" * 40)]
+    assert sizes == sorted(sizes, reverse=True)
 
 
 def test_kpi_card_value_never_wraps():

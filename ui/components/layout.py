@@ -19,14 +19,16 @@ def page_header(
 ) -> ft.Control:
     """Standard page header (title + optional subtitle + right-aligned actions)."""
     left = ft.Column(
-        spacing=2,
+        spacing=3,
         expand=True,
         controls=[
-            ft.Text(title, size=T.FONT_HERO, weight=ft.FontWeight.BOLD, color=T.TEXT_PRIMARY),
+            # Hero title uses the real SemiBold file, not a synthetic bold.
+            ft.Text(title, size=T.FONT_HERO, weight=ft.FontWeight.W_400,
+                    color=T.TEXT_PRIMARY, font_family=T.FONT_FAMILY_BOLD),
         ],
     )
     if subtitle:
-        left.controls.append(ft.Text(subtitle, size=T.FONT_SMALL, color=T.TEXT_SECONDARY))
+        left.controls.append(ft.Text(subtitle, size=T.FONT_BODY, color=T.TEXT_SECONDARY))
 
     controls: list[ft.Control] = [left]
     if actions:
@@ -46,12 +48,17 @@ def card(
     padding: int | None = None,
     expand: bool = False,
     width: int | None = None,
+    bgcolor: str | None = None,
 ) -> ft.Control:
-    """A themed surface card (white in light mode) with a soft shadow."""
+    """A themed surface card (white in light mode) with a soft shadow.
+
+    ``bgcolor`` exists for the rare card that should read as a callout (a hero or
+    an impact panel) rather than as ordinary content.
+    """
     return ft.Container(
         content=content,
         padding=padding if padding is not None else T.CARD_PADDING,
-        bgcolor=T.BG_CARD,
+        bgcolor=bgcolor or T.BG_CARD,
         border_radius=T.RADIUS,
         border=ft.Border.all(1, T.BORDER_SUBTLE),
         shadow=T.shadow(),
@@ -76,12 +83,19 @@ def section(
         subtitle_control = ft.Text(subtitle, size=T.FONT_TINY, color=T.TEXT_TERTIARY)
     else:
         subtitle_control = subtitle
+    def _heading_title(text: str, size: int) -> ft.Text:
+        # Large headings use the real SemiBold file rather than asking the Regular
+        # for a synthetic bold, which looks thin at display sizes.
+        family = T.FONT_FAMILY_BOLD if size >= T.FONT_SUBTITLE else T.FONT_FAMILY
+        weight = ft.FontWeight.W_400 if family == T.FONT_FAMILY_BOLD else ft.FontWeight.W_600
+        return ft.Text(text, size=size, weight=weight, color=T.TEXT_PRIMARY, font_family=family)
+
     heading_controls: list[ft.Control] = [
         ft.Column(
             spacing=1,
             expand=True,
             controls=[
-                ft.Text(title, size=T.FONT_SUBTITLE, weight=ft.FontWeight.W_600, color=T.TEXT_PRIMARY),
+                _heading_title(title, T.FONT_SUBTITLE),
                 *([subtitle_control] if subtitle_control is not None else []),
             ],
         )
@@ -116,38 +130,43 @@ def list_row(
     trailing: Optional[ft.Control] = None,
     on_click: Optional[Callable] = None,
 ) -> ft.Control:
-    """A padded, hover-highlighted row used by alert / activity lists."""
+    """A padded, hover-highlighted row used by alert / activity lists.
+
+    Rows are the app's most-clicked element, so they carry a little more vertical
+    breathing room than the old 9px and give the label a proper two-line stack.
+    """
     controls: list[ft.Control] = []
     if leading is not None:
         controls.append(leading)
     controls.append(
         ft.Column(
-            spacing=1,
+            spacing=2,
             expand=True,
             controls=[
                 ft.Text(title, size=T.FONT_BODY, color=T.TEXT_PRIMARY, weight=ft.FontWeight.W_500),
-                *([ft.Text(subtitle, size=T.FONT_TINY, color=T.TEXT_TERTIARY)] if subtitle else []),
+                *([ft.Text(subtitle, size=T.FONT_SMALL, color=T.TEXT_SECONDARY)] if subtitle else []),
             ],
         )
     )
     if trailing is not None:
         controls.append(trailing)
     return ft.Container(
-        padding=ft.Padding.symmetric(horizontal=10, vertical=9),
+        padding=ft.Padding.symmetric(horizontal=12, vertical=11),
         border_radius=T.RADIUS_SMALL,
+        bgcolor=T.BG_HOVER if on_click is not None else None,
         ink=on_click is not None,
         on_click=on_click,
         content=ft.Row(spacing=12, vertical_alignment=ft.CrossAxisAlignment.CENTER, controls=controls),
     )
 
 
-def icon_tile(icon: str, *, color: str, bgcolor: str | None = None, size: int = 40) -> ft.Control:
+def icon_tile(icon: str, *, color: str, bgcolor: str | None = None, size: int = 42) -> ft.Control:
     """A rounded pastel icon tile (the small square icon used across the mockups)."""
     return ft.Container(
         width=size,
         height=size,
         border_radius=T.RADIUS_SMALL,
-        bgcolor=bgcolor or ft.Colors.with_opacity(0.14, color),
+        bgcolor=bgcolor or ft.Colors.with_opacity(0.16, color),
         alignment=ft.Alignment.CENTER,
         content=ft.Icon(icon, size=int(size * 0.5), color=color),
     )

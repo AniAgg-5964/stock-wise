@@ -59,8 +59,8 @@ def search_field(
         hint_text=hint,
         width=width,
         expand=expand,
-        height=40,
-        content_padding=ft.Padding.symmetric(horizontal=14),
+        height=44,
+        content_padding=ft.Padding.symmetric(horizontal=16),
         on_change=on_change,
         on_submit=on_submit,
         bgcolor=T.BG_INPUT,
@@ -69,6 +69,7 @@ def search_field(
         cursor_color=T.PRIMARY,
         hint_style=ft.TextStyle(color=T.TEXT_TERTIARY, size=T.FONT_BODY),
         prefix_icon=ft.Icons.SEARCH,
+        prefix_style=ft.TextStyle(color=T.TEXT_TERTIARY),
         border=ft.OutlineInputBorder(
             border_radius=ft.BorderRadius.all(T.INPUT_RADIUS),
             side=ft.BorderSide(0, ft.Colors.TRANSPARENT),

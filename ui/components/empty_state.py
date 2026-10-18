@@ -23,24 +23,27 @@ def empty_state(
     """Build a centred empty-state panel."""
     children: list[ft.Control] = [
         ft.Container(
-            width=56,
-            height=56,
-            border_radius=28,
-            bgcolor=T.BG_INPUT,
+            width=64,
+            height=64,
+            border_radius=32,
+            bgcolor=T.TINT_HEALTHY if icon == ft.Icons.CHECK_CIRCLE_OUTLINE else T.BG_INPUT,
             alignment=ft.Alignment.CENTER,
-            content=ft.Icon(icon, size=26, color=T.TEXT_TERTIARY),
+            content=ft.Icon(icon, size=30,
+                            color=T.STATUS_HEALTHY if icon == ft.Icons.CHECK_CIRCLE_OUTLINE
+                            else T.TEXT_TERTIARY),
         ),
-        ft.Container(height=12),
-        ft.Text(title, size=T.FONT_SUBTITLE, weight=ft.FontWeight.W_600, color=T.TEXT_PRIMARY),
-        ft.Container(height=4),
+        ft.Container(height=16),
+        ft.Text(title, size=T.FONT_SUBTITLE, weight=ft.FontWeight.W_600, color=T.TEXT_PRIMARY,
+                text_align=ft.TextAlign.CENTER),
+        ft.Container(height=6),
         ft.Text(message, size=T.FONT_BODY, color=T.TEXT_SECONDARY, text_align=ft.TextAlign.CENTER),
     ]
     if action is not None:
-        children += [ft.Container(height=16), action]
+        children += [ft.Container(height=18), action]
     return ft.Container(
         expand=True,
         alignment=ft.Alignment.CENTER,
-        padding=T.CONTENT_PADDING,
+        padding=ft.Padding.symmetric(vertical=40, horizontal=T.CONTENT_PADDING),
         content=ft.Column(
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             alignment=ft.MainAxisAlignment.CENTER,
