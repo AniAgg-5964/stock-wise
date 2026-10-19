@@ -21,6 +21,7 @@ from ui.components.feedback import notify, notify_error
 from ui.components.forms import dropdown_field, search_field, text_field
 from ui.components.kpi_card import KpiMetric, kpi_strip
 from ui.components.layout import flow_row, page_header, scroll_column, section
+from ui.components.sparkline import meter
 from ui.components.table import action_cell, chip_cell, entity_cell, styled_table, text_cell
 
 def _status_filters() -> list[tuple[str, str]]:
@@ -127,8 +128,20 @@ def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
                     ),
                     text_cell(product.sku, color=T.TEXT_SECONDARY),
                     text_cell(product.category, color=T.TEXT_SECONDARY),
-                    text_cell(f"{snap.usable_stock:g} {product.unit}", color=stock_color,
-                              weight=ft.FontWeight.W_600),
+                    # The number says how much; the meter next to it says how
+                    # close that is to the reorder point, which is the thing the
+                    # shopkeeper is actually deciding about. Both come from the
+                    # snapshot this row already loaded.
+                    ft.DataCell(ft.Row(
+                        spacing=8, tight=True,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        controls=[
+                            ft.Text(f"{snap.usable_stock:g} {product.unit}", size=T.FONT_BODY,
+                                    color=stock_color, weight=ft.FontWeight.W_600, no_wrap=True),
+                            meter(snap.usable_stock, product.reorder_point,
+                                  color=stock_color, width=44, height=6),
+                        ],
+                    )),
                     text_cell(format_money(product.selling_price), color=T.TEXT_SECONDARY),
                     chip_cell(_status_labels().get(snap.status, snap.status), snap.status),
                     action_cell(lambda e, pid=product.id: navigate(f"/product/{pid}"),

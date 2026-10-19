@@ -83,8 +83,12 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
                               on_click=lambda e: _open_edit(page, product, navigate)),
             ft.OutlinedButton(content=t("action.adjust_stock"), icon=ft.Icons.TUNE,
                               on_click=lambda e: _open_adjust(page, product, navigate)),
-            ft.Button(content=t("action.record_waste"), icon=ft.Icons.DELETE_OUTLINE,
-                      on_click=lambda e: _open_waste(page, product, navigate)),
+            # Every action here is maintenance on one product, and one of them is
+            # destructive, so none of them is the screen's primary. A filled
+            # "Record waste" made the button that throws stock away the most
+            # prominent thing on the page.
+            ft.OutlinedButton(content=t("action.record_waste"), icon=ft.Icons.DELETE_OUTLINE,
+                              on_click=lambda e: _open_waste(page, product, navigate)),
         ],
     )
 

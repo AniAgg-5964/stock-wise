@@ -29,6 +29,7 @@ from ui.components.layout import (
     section,
 )
 from ui.components.status_chip import status_chip
+from ui.components.sparkline import mini_bars
 from ui.components.table import styled_table, text_cell
 
 # Ledger movement types -> translation keys. Every ``MovementType`` value is
@@ -279,30 +280,42 @@ def _top_products_panel(products, snapshots, forecasts) -> ft.Control:
     for snap in snapshots:
         status_by_id[snap.product.id] = snap.status
 
-    ranked: list[tuple[str, float, str]] = []
+    ranked: list[tuple[str, float, str, list[float]]] = []
     for product in products:
         latest = forecasts.get(product.id)
         if latest is None or not latest.points:
             continue
-        total = sum(p.predicted_qty for p in latest.points[:7])
-        ranked.append((product.name, total, status_by_id.get(product.id, "healthy")))
+        week = [p.predicted_qty for p in latest.points[:7]]
+        ranked.append((product.name, sum(week), status_by_id.get(product.id, "healthy"), week))
     ranked.sort(key=lambda r: -r[1])
 
     rows = [
         ft.DataRow(cells=[
             text_cell(name, weight=ft.FontWeight.W_500),
-            text_cell(f"{total:g}", weight=ft.FontWeight.W_600),
+            # A total cannot show whether the week is flat or whether Saturday
+            # spikes. The seven points are already loaded for the total, so the
+            # shape is free — and a tight Row here is what keeps the DataTable
+            # from rendering blank, which is a Flet 1.0 trap with cell content.
+            ft.DataCell(ft.Row(
+                spacing=8, tight=True,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Text(f"{total:g}", size=T.FONT_BODY, weight=ft.FontWeight.W_600,
+                            color=T.TEXT_PRIMARY, no_wrap=True),
+                    mini_bars(week, width=58, height=16, muted=total <= 0),
+                ],
+            )),
             ft.DataCell(status_chip(t(_STATUS_LABELS.get(status, status)), status)),
         ])
-        for name, total, status in ranked[:6]
+        for name, total, status, week in ranked[:6]
     ]
-    # This panel is 5 of 12 columns, so it has roughly 395px of table width.
-    # Styled_table's default 22px gutters plus a two-word status header overflowed
-    # that, and because the table scrolls rather than squeezes, the overflow was
-    # invisible: the header and the chip were simply cut off at the panel edge.
     content = styled_table(
         [t("col.product"), t("col.forecast_7d"), t("field.status")],
         rows,
+        # The panel is 5 of 12 columns, so it has roughly 395px of table width.
+        # Styled_table's default 22px gutters plus a two-word status header overflowed
+        # that, and because the table scrolls rather than squeezes, the overflow was
+        # invisible: the header and the chip were simply cut off at the panel edge.
         column_spacing=12,
         empty_message=t("table.populate_forecasts"),
     )

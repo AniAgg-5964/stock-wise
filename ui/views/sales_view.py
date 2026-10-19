@@ -126,7 +126,12 @@ def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Contr
     new_sale = section(
         t("panel.record_sale"),
         ft.Column(spacing=T.GAP, controls=[
-            flow_row([product_dd, qty_field, price_field, ft.Button(content=t("action.add_to_cart"), icon=ft.Icons.ADD, on_click=add_to_cart)]),
+            # "Add to cart" is a step towards the sale, not the sale itself. Filled as well
+            # as "Record sale" it left two primaries on one screen and neither
+            # read as the real one.
+            flow_row([product_dd, qty_field, price_field,
+                      ft.OutlinedButton(content=t("action.add_to_cart"), icon=ft.Icons.ADD,
+                                        on_click=add_to_cart)]),
             cart_holder,
             ft.Row(controls=[
                 ft.Text(t("label.total"), size=T.FONT_SMALL, color=T.TEXT_SECONDARY),

@@ -26,6 +26,7 @@ from ui.components.feedback import notify, notify_error
 from ui.components.forms import text_field
 from ui.components.kpi_card import KpiMetric, kpi_strip
 from ui.components.layout import page_header, scroll_column, section
+from ui.components.sparkline import meter
 from ui.components.table import action_cell, chip_cell, styled_table, text_cell
 
 
@@ -113,11 +114,27 @@ def build_expiry_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Cont
                 if at_risk > 0
                 else text_cell("0", color=T.TEXT_TERTIARY)
             )
+            if expired_rows or left is None:
+                left_cell = text_cell(left_text, color=T.TEXT_SECONDARY)
+            else:
+                # Runway. A full bar means it expires today and an empty one means
+                # it sits at the far edge of the window, so urgency is read off
+                # the row rather than learned from a colour scale. Already-expired
+                # rows have a negative `left` and would peg the meter, so they
+                # keep the plain number.
+                left_cell = ft.DataCell(ft.Row(
+                    spacing=8, tight=True,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        ft.Text(left_text, size=T.FONT_BODY, color=T.TEXT_SECONDARY, no_wrap=True),
+                        meter(window - left, window, color=T.STATUS_WARNING, width=44, height=6),
+                    ],
+                ))
             rows.append(ft.DataRow(cells=[
                 text_cell(name),
                 text_cell(batch.batch_code or f"#{batch.id}", color=T.TEXT_SECONDARY),
                 text_cell(batch.expiry_date or "\u2014", color=T.TEXT_SECONDARY),
-                text_cell(left_text, color=T.TEXT_SECONDARY),
+                left_cell,
                 text_cell(f"{batch.quantity_remaining:g}"),
                 risk_cell,
                 text_cell(format_money((batch.unit_cost or Decimal("0")) * Decimal(str(batch.quantity_remaining))),
