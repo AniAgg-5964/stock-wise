@@ -11,7 +11,15 @@ import flet as ft
 from app.theme import StockWiseTheme as T
 from application.services.supplier_research_service import SourceCandidate
 from domain.money import format_money
-from ui.components.kpi_card import KPI_BREAKPOINTS, KpiMetric, _value_size, kpi_strip, value_fits
+from ui.components.kpi_card import (
+    KPI_FOUR_UP_WIDTH,
+    KpiMetric,
+    _VALUE_BUDGET_PX,
+    _span_for,
+    _value_size,
+    kpi_strip,
+    value_fits,
+)
 from ui.components.layout import list_row
 from ui.views.supplier_research_panel import _confidence_color, _site_cell
 
@@ -71,11 +79,33 @@ def test_even_an_oversized_value_does_not_grow_the_font():
 def test_four_metrics_stay_on_one_row_at_the_measured_width():
     """The bug this replaces.
 
-    ``KPI_BREAKPOINTS`` used to put the four-across row behind ``lg: 1300``, while
-    its own comment recorded that four across needs about 1280px. Any 1280-class
-    window therefore rendered two enormous half-empty tiles instead.
+    Four-across used to sit behind a ``ResponsiveRow`` breakpoint of 1240, which
+    the Flet docs never define as a page *or* a container width. Measured against
+    the container - a window minus the sidebar and the content padding - that
+    threshold engaged at a ~1544px window, so a 1366 or 1440 laptop rendered two
+    enormous half-empty tiles instead. The width is now measured, not guessed.
     """
-    assert KPI_BREAKPOINTS["lg"] <= 1280
+    # Derived from the text budget, so the two cannot drift apart.
+    assert KPI_FOUR_UP_WIDTH == 4 * (_VALUE_BUDGET_PX + 2 * 10 + 2 * 18) + 3 * 18
+
+    # Four across must engage on an ordinary laptop window. With the sidebar and
+    # content padding removed, 1366 and 1440 both clear the threshold.
+    for window in (1366, 1440, 1600, 1920):
+        content = window - T.SIDEBAR_WIDTH - 2 * T.CONTENT_PADDING
+        assert content >= KPI_FOUR_UP_WIDTH, (
+            f"{window}px window leaves {content}px of content, under the "
+            f"{KPI_FOUR_UP_WIDTH}px needed for four across"
+        )
+
+    # ...and must not engage when there genuinely is not room, which is the 2x2.
+    assert _span_for(4, width=KPI_FOUR_UP_WIDTH - 1) == 6
+    assert _span_for(4, width=KPI_FOUR_UP_WIDTH) == 3
+
+
+def test_an_unmeasured_viewport_does_not_look_narrow():
+    """Before the first resize event the width is unknown, not zero. Treating it
+    as zero would stack everything on the first paint and then jump."""
+    assert _span_for(4, width=None) == _span_for(4, width=KPI_FOUR_UP_WIDTH + 400)
 
 
 def test_kpi_strip_is_one_surface_not_four_cards():

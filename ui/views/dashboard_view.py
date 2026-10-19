@@ -296,8 +296,16 @@ def _top_products_panel(products, snapshots, forecasts) -> ft.Control:
         ])
         for name, total, status in ranked[:6]
     ]
-    content = styled_table([t("col.product"), t("col.forecast_7d"), t("col.stock_status")], rows,
-                           empty_message=t("table.populate_forecasts"))
+    # This panel is 5 of 12 columns, so it has roughly 395px of table width.
+    # Styled_table's default 22px gutters plus a two-word status header overflowed
+    # that, and because the table scrolls rather than squeezes, the overflow was
+    # invisible: the header and the chip were simply cut off at the panel edge.
+    content = styled_table(
+        [t("col.product"), t("col.forecast_7d"), t("field.status")],
+        rows,
+        column_spacing=12,
+        empty_message=t("table.populate_forecasts"),
+    )
     return section(
         t("panel.top_demand"), content, subtitle=t("panel.top_products_sub"),
         actions=[ft.TextButton(content=t("action.view_all"), on_click=lambda e: navigate("/forecasting"))]

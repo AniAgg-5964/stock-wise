@@ -122,7 +122,4 @@ def styled_table(
             ft.ControlState.HOVERED: ft.Colors.with_opacity(0.05, T.PRIMARY)
         },
     )
-    # ``expand=True`` so the table fills the card instead of shrink-wrapping to
-    # its natural width and leaving a wide empty band on the right — which is
-    # what made every table look half-finished inside its card.
-    return ft.Row([table], scroll=ft.ScrollMode.AUTO, expand=True)
+    return ft.Row([table], scroll=ft.ScrollMode.AUTO)

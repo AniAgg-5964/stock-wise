@@ -25,21 +25,32 @@ from typing import Callable, Optional
 import flet as ft
 
 from app.theme import StockWiseTheme as T
+from app.viewport import StockWiseViewport
 
-#: Where four metrics become a single row. Below this they fall into 2x2. Kept
-#: below the 1280px class of laptop, which used to miss the 4-up threshold and
-#: render two enormous half-empty tiles.
-KPI_BREAKPOINTS = {"xs": 0, "sm": 340, "lg": 1240}
-
-#: Text width available to a metric value at the 4-up threshold:
-#: 1240 - sidebar 248 - 2*content padding 28 - 3*gap 18 = 802 / 4 = 200,
-#: less card padding 2*18 and cell padding 2*10 -> ~164.
+#: Text width available to a metric value once four sit across. Derived from a
+#: 1240px window: 1240 - sidebar 248 - 2*content padding 28 = 936 of content,
+#: less 3 gaps of 18 leaves 882/4 = 220 per cell, less strip padding 2*18 and
+#: cell padding 2*10 -> ~164.
 _VALUE_BUDGET_PX = 164
 #: Average glyph advance for Mukta, as a fraction of the font size.
 _ADVANCE_RATIO = 0.52
 
 _STRIP_PADDING = 18
 _CELL_PADDING = 10
+
+#: Content width at which four metrics fit that budget. Derived rather than
+#: guessed, so the threshold cannot drift away from ``_VALUE_BUDGET_PX``: each
+#: cell needs the budget plus its own padding plus the strip's padding, and four
+#: cells plus three gaps have to fit. = 4 * (164+20+18) + 3*18 = 934.
+#:
+#: This is a *content* width, and that is the whole point. It used to be a
+#: ``ResponsiveRow`` breakpoint of 1240, which the Flet docs never define as
+#: either a page or a container width. Under Flutter's container-relative
+#: evaluation that meant four-across only engaged at a ~1544px window, so a 1366
+#: or 1440 laptop — what most shops have — never got it. The shell now measures
+#: the viewport (``app.viewport``) and passes the real number.
+KPI_FOUR_UP_WIDTH = 4 * (_VALUE_BUDGET_PX + 2 * _CELL_PADDING + 2 * _STRIP_PADDING) \
+    + 3 * T.GAP
 
 
 def _value_size(value: str) -> int:
@@ -84,10 +95,18 @@ _CAPTION_COLOR = {
 }
 
 
-def _span_for(count: int) -> int:
-    """Columns each metric occupies on a 12-column grid."""
+def _span_for(count: int, *, width: int | None) -> int:
+    """Columns each metric occupies on the 12-column grid.
+
+    ``width`` is the measured content width, or ``None`` when the shell has not
+    reported one yet. ``None`` is treated as a normal desktop window rather than
+    as zero, so the first paint before any resize event looks like every window
+    after it.
+    """
     if count <= 1:
         return 12
+    if width is not None and width < KPI_FOUR_UP_WIDTH:
+        return 6  # deliberate 2x2, never four clipped cells
     if count == 2:
         return 6
     if count == 3:
@@ -95,7 +114,7 @@ def _span_for(count: int) -> int:
     return 3
 
 
-def _metric_cell(metric: KpiMetric, col: dict) -> ft.Control:
+def _metric_cell(metric: KpiMetric, span: int) -> ft.Control:
     accent = metric.accent or T.PRIMARY
     caption = metric.caption
     caption_color = getattr(T, _CAPTION_COLOR.get(metric.delta_kind, "TEXT_TERTIARY"))
@@ -144,7 +163,7 @@ def _metric_cell(metric: KpiMetric, col: dict) -> ft.Control:
 
     # No border, no fill, no radius: the metric is not a surface.
     return ft.Container(
-        col=col,
+        col=span,
         padding=ft.Padding.symmetric(horizontal=_CELL_PADDING, vertical=2),
         on_click=metric.on_click,
         ink=metric.on_click is not None,
@@ -152,18 +171,28 @@ def _metric_cell(metric: KpiMetric, col: dict) -> ft.Control:
     )
 
 
-def kpi_strip(metrics: list[KpiMetric], *, padding: int | None = None) -> ft.Control:
-    """One panel holding every headline metric, reflowing as the window narrows."""
+def kpi_strip(
+    metrics: list[KpiMetric],
+    *,
+    padding: int | None = None,
+    available_width: int | None = None,
+) -> ft.Control:
+    """One panel holding every headline metric, reflowing as the window narrows.
+
+    ``available_width`` is the measured content width; when it is omitted the
+    value published by ``app.viewport`` is used. The span is then decided in
+    Python against that number, so the layout does not depend on how Flet
+    resolves ``ResponsiveRow`` breakpoints.
+    """
     if not metrics:
         return ft.Container(height=0)
 
-    span = _span_for(len(metrics))
-    col = {"xs": 12, "sm": 6, "lg": span}
+    width = available_width if available_width is not None else StockWiseViewport.get()
+    span = _span_for(len(metrics), width=width)
     row = ft.ResponsiveRow(
-        controls=[_metric_cell(m, col) for m in metrics],
+        controls=[_metric_cell(m, span) for m in metrics],
         spacing=T.GAP,
         run_spacing=T.GAP_SMALL,
-        breakpoints=dict(KPI_BREAKPOINTS),
     )
     return ft.Container(
         content=row,

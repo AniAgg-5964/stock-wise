@@ -20,7 +20,10 @@ from app.config import Config
 from app.i18n import StockWiseLang as L, t
 from app.navigation import build_sidebar, shop_name
 from app.theme import StockWiseTheme as T
+from app.viewport import StockWiseViewport
 from ui.components.forms import search_field
+from ui.components.kpi_card import KPI_FOUR_UP_WIDTH
+from ui.components.layout import content_width
 from ui.components.status_chip import status_chip
 from ui.views.registry import build_view
 
@@ -60,8 +63,61 @@ def main(page: ft.Page) -> None:
     except Exception:  # pragma: no cover - window API differs in web mode
         logger.debug("Window sizing unavailable in this Flet view mode")
 
-    state: dict = {"route": "/", "collapsed": False, "panel": None, "query": ""}
-    refs: dict = {"overlay": None}
+    state: dict = {"route": "/", "collapsed": False, "panel": None, "query": "",
+                   "viewport": None}
+    refs: dict = {"overlay": None, "content_shell": None}
+
+    # ------------------------------------------------------- responsive max-width
+    # Flet 1.0 has no ConstrainedBox, so the content cap is an explicit width on
+    # the shell below, set from the last reported viewport width. The same number
+    # is published for components that lay themselves out against it, so the
+    # width budget in kpi_card is measured rather than inferred from a
+    # ResponsiveRow breakpoint (whose reference width the Flet docs leave
+    # undefined).
+    def _measure() -> int | None:
+        """Publish the measured content width and return it."""
+        sidebar = T.SIDEBAR_WIDTH_COLLAPSED if state["collapsed"] else T.SIDEBAR_WIDTH
+        width = content_width(state.get("viewport"), sidebar_width=sidebar)
+        StockWiseViewport.set(width)
+        return width
+
+    def _four_up() -> bool:
+        width = StockWiseViewport.get()
+        return width is None or width >= KPI_FOUR_UP_WIDTH
+
+    def on_resize(event) -> None:
+        """Re-cap the content column, and re-lay it out when it really changed.
+
+        The common case updates one attribute: every view reads the database when
+        it is built, so re-rendering per resize event would query the DB for every
+        pixel of a drag. Only crossing the four-across threshold alters how the
+        content itself is arranged, and that happens at most once per drag.
+        """
+        viewport = getattr(event, "width", None)
+        if not viewport:
+            return
+        state["viewport"] = viewport
+        was_wide = _four_up()
+        cap = _measure()
+        if _four_up() != was_wide:
+            render()
+            return
+        shell = refs.get("content_shell")
+        if shell is None:
+            return
+        shell.width = cap
+        shell.expand = cap is None
+        try:
+            shell.update()
+        except Exception:  # pragma: no cover - control not mounted yet
+            logger.debug("Could not re-cap content width")
+
+    page.on_resize = on_resize
+    # The window is opened at Config.WINDOW_WIDTH, so assume that until the first
+    # resize event arrives: laying out for a real desktop beats stacking on the
+    # very first paint and jumping a moment later.
+    state["viewport"] = getattr(page, "width", None) or Config.WINDOW_WIDTH
+    _measure()
 
     # ------------------------------------------------------------------ behaviour
     def navigate(route: str) -> None:
@@ -388,15 +444,28 @@ def main(page: ft.Page) -> None:
         )
         refs["overlay"] = overlay
 
+        # The content shell carries the max-width cap. An explicit width centres it
+        # in the row; with no cap it expands instead, because a Row hands an
+        # unexpanded child unbounded width.
+        cap = _measure()
+        shell = ft.Container(
+            content=content,
+            width=cap,
+            expand=cap is None,
+            padding=T.CONTENT_PADDING,
+        )
+        refs["content_shell"] = shell
+
         content_column = ft.Column(
             expand=True,
             spacing=0,
             controls=[
                 build_top_bar(),
-                ft.Container(
-                    content=content,
+                ft.Row(
                     expand=True,
-                    padding=T.CONTENT_PADDING,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    vertical_alignment=ft.CrossAxisAlignment.STRETCH,
+                    controls=[shell],
                 ),
             ],
         )

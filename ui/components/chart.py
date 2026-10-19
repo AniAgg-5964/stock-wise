@@ -20,10 +20,12 @@ over the fill rather than a per-slice border.
 
 from __future__ import annotations
 
+import math
 from typing import Callable, Sequence
 
 import flet as ft
 
+from app.i18n import t
 from app.theme import StockWiseTheme as T
 
 _GRID_LINES = 4
@@ -34,6 +36,58 @@ _LINE_THICKNESS = 3
 _MAX_SLICES = 220
 _MIN_STEPS_PER_SEGMENT = 1
 _MAX_STEPS_PER_SEGMENT = 48
+
+#: Headroom above the tallest value before the axis is rounded. A little space
+#: above the curve is what makes a chart readable rather than pinned to the top
+#: gridline.
+_AXIS_HEADROOM = 1.15
+
+#: Bar charts stop stretching below this many bars. A stretched bar is a slab,
+#: and a one-point series ("revenue on a single day") became a full-width solid
+#: block instead of a bar.
+_MIN_BARS_TO_STRETCH = 12
+_BAR_WIDTH = 46
+_BAR_GAP = 8
+
+#: Rounded magnitudes an axis step may take.
+_NICE_STEPS = (1.0, 2.0, 2.5, 5.0, 10.0)
+
+
+def _nice_step(raw: float) -> float:
+    """The smallest 1/2/2.5/5 x 10^n step that is at least ``raw``."""
+    if raw <= 0:
+        return 1.0
+    magnitude = 10.0 ** math.floor(math.log10(raw))
+    for factor in _NICE_STEPS:
+        candidate = factor * magnitude
+        if candidate >= raw:
+            return candidate
+    return 10.0 * magnitude  # pragma: no cover - 10.0 is the largest factor
+
+
+def nice_axis_max(peak: float, divisions: int = _GRID_LINES) -> float:
+    """An axis maximum that puts a round number on every gridline.
+
+    Scaling the axis by a fixed headroom factor, which is what this used to do,
+    makes the labels arbitrary — a peak of 70 became an axis of 80.5, and
+    whenever the factor landed badly the labels picked up halves. That is where
+    the dashboard's ``81 / 61 / 41 / 20 / 0`` came from. Choosing a round *step*
+    and then rounding the maximum up to a whole multiple of it keeps every label
+    clean, and still reserves headroom because the maximum is rounded up.
+    """
+    if peak <= 0:
+        return float(divisions)
+    step = _nice_step(peak / divisions)
+    axis = math.ceil(peak / step - 1e-9) * step
+    # Gridlines are fractions of the axis, so the axis has to divide evenly by
+    # ``divisions`` or the labels pick up fractions again — a "nice" step of 2.5
+    # gives an axis of 15 for a peak of 12, and 15/4 is 3.75.
+    if axis < divisions:
+        return float(divisions)
+    remainder = axis % divisions
+    if remainder > 1e-9:
+        axis += divisions - remainder
+    return axis
 
 
 def _short(value: float) -> str:
@@ -167,10 +221,12 @@ def area_chart(
     smooth = _interpolate(values, steps)
     smooth_upper = _interpolate(upper_values, steps) if upper_values else None
 
-    peak = max(smooth) if smooth else 1.0
+    peak = max(smooth) if smooth else 0.0
     if smooth_upper:
         peak = max(peak, max(smooth_upper))
-    peak = peak * 1.15 if peak > 0 else 1.0
+    # Round the axis *after* reserving headroom, so the gridlines carry round
+    # numbers instead of whatever the headroom factor happened to produce.
+    peak = nice_axis_max(peak * _AXIS_HEADROOM)
 
     plot_height = height  # the whole plot area; labels are drawn in side columns
     line_pixels = _curve_pixels(smooth, plot_height, peak)
@@ -282,11 +338,22 @@ def bar_chart(
     accent: str | None = None,
     forecast_from: int | None = None,
     forecast_accent: str | None = None,
-    empty_message: str = "No data to chart",
+    empty_message: str | None = None,
 ) -> ft.Control:
-    """A simple vertical bar chart (history vs forecast colour split)."""
+    """A simple vertical bar chart (history vs forecast colour split).
+
+    **A short series must not stretch.** Every bar used to be ``expand=True``
+    inside the row, so a series of one — which is exactly what the demo data
+    produces, since all of its sales fall on the same day — gave a single cell
+    the full chart width. At full width and full height with a 2px top border,
+    that is not a bar chart, it is a solid green block. Below
+    ``_MIN_BARS_TO_STRETCH`` bars now take a fixed width and the group is
+    centred, so a single day reads as a single column.
+    """
     accent = accent or T.PRIMARY
     forecast_accent = forecast_accent or T.ACCENT
+    if empty_message is None:
+        empty_message = t("chart.empty")
     values = [float(v) for v in values]
     if not values:
         return ft.Container(
@@ -296,16 +363,20 @@ def bar_chart(
         )
 
     labels = list(labels or [""] * len(values))
-    peak = max([abs(v) for v in values] + [0.5])
+    # Bars are measured against a rounded axis, so the tallest keeps some
+    # headroom instead of filling the plot edge to edge.
+    axis_max = nice_axis_max(max([abs(v) for v in values] + [0.5]) * _AXIS_HEADROOM)
     bar_area = height - 34  # leave room for the value + day labels
+    stretch = len(values) >= _MIN_BARS_TO_STRETCH
 
     cells: list[ft.Control] = []
     for i, value in enumerate(values):
         is_forecast = forecast_from is not None and i >= forecast_from
-        bar_h = max(3, int(bar_area * (value / peak))) if value > 0 else 3
+        bar_h = max(3, int(bar_area * (abs(value) / axis_max))) if value > 0 else 3
         cells.append(
             ft.Container(
-                expand=True,
+                # A stretched cell fills the row; a fixed-width one does not.
+                **({"expand": True} if stretch else {"width": _BAR_WIDTH}),
                 height=height,
                 padding=ft.Padding.symmetric(horizontal=2),
                 content=ft.Column(
@@ -330,7 +401,12 @@ def bar_chart(
             )
         )
 
-    return ft.Row(spacing=2, controls=cells, vertical_alignment=ft.CrossAxisAlignment.END)
+    return ft.Row(
+        spacing=2 if stretch else _BAR_GAP,
+        alignment=ft.MainAxisAlignment.START if stretch else ft.MainAxisAlignment.CENTER,
+        controls=cells,
+        vertical_alignment=ft.CrossAxisAlignment.END,
+    )
 
 
 def chart_legend(items: Sequence[tuple[str, str]], *, dashed: Sequence[str] | None = None) -> ft.Control:

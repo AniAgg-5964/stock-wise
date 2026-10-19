@@ -13,6 +13,7 @@ from typing import Callable, Optional
 import flet as ft
 
 from app.theme import StockWiseTheme as T
+from app.viewport import StockWiseViewport
 
 
 def page_header(
@@ -208,31 +209,44 @@ def scroll_column(controls: list[ft.Control], *, spacing: int = T.GAP) -> ft.Col
 # breakpoints, so there is deliberately no KPI layout left in this module.
 
 
-# Wide panels sit side by side on a desktop and stack on a narrow window.
-# Kept above the KPI breakpoint: a two-up panel here holds a DataTable, which
-# needs real width to avoid horizontal overflow.
-PANEL_BREAKPOINTS = {"xs": 0, "lg": 1200}
+# Wide panels sit side by side on a desktop and stack on a narrow window. This is
+# a *content* width (see ``app/viewport.py``), not a window width: a two-up panel
+# here holds a DataTable, which needs roughly 600px a side to avoid horizontal
+# overflow, so two of those plus the gap between them.
+PANEL_TWO_UP_WIDTH = 2 * 600 + T.GAP
 
-# Filter/field rows: stack in narrow windows, share a line on wide desktops.
-# Matches the panel breakpoint so fixed-width fields always fit their column.
-FILTER_BREAKPOINTS = {"xs": 0, "sm": 340, "lg": 1200}
+# Filter/field rows: three across on a wide desktop, two when narrower. Matched
+# to the panel width so fixed-width fields always fit their column.
+FILTER_WIDE_WIDTH = 1200
 
 
-def panel_grid(panels: list[tuple[ft.Control, int]]) -> ft.Control:
+def _side_by_side(width: int | None, threshold: int) -> bool:
+    """Whether ``width`` of content is wide enough for a multi-column row.
+
+    ``None`` (the shell has not reported a viewport yet) counts as wide so the
+    first paint matches a normal desktop window rather than stacking and then
+    jumping.
+    """
+    return width is None or width >= threshold
+
+
+def panel_grid(panels: list[tuple[ft.Control, int]], *,
+               available_width: int | None = None) -> ft.Control:
     """Arrange ``(control, span)`` pairs side by side, stacking when narrow.
 
-    ``span`` is the number of a 12-column grid the panel occupies from the
-    ``lg`` breakpoint up.
+    ``span`` is the number of a 12-column grid the panel occupies when there is
+    room for it; a panel that asked for all 12 keeps them stacked either way.
     """
+    width = available_width if available_width is not None else StockWiseViewport.get()
+    wide = _side_by_side(width, PANEL_TWO_UP_WIDTH)
     controls = [
-        ft.Container(content=control, col={"xs": 12, "lg": span})
+        ft.Container(content=control, col=span if wide else 12)
         for control, span in panels
     ]
     return ft.ResponsiveRow(
         controls=controls,
         spacing=T.GAP,
         run_spacing=T.GAP,
-        breakpoints=dict(PANEL_BREAKPOINTS),
     )
 
 
@@ -241,25 +255,60 @@ def flow_row(
     *,
     col: dict | None = None,
     spacing: int | None = None,
+    available_width: int | None = None,
 ) -> ft.Control:
     """A row of controls that flows onto the next line instead of overflowing.
 
     ``items`` is a list of controls, or ``(control, col)`` pairs to give an item
-    its own grid span. Wrapping uses ``ResponsiveRow`` because ``ft.Row(wrap=True)``
+    its own grid span. The ``lg`` span is used when there is room for the row and
+    the ``sm`` span when there is not, so an explicit pair stays meaningful on a
+    narrow window. Wrapping uses ``ResponsiveRow`` because ``ft.Row(wrap=True)``
     renders as a blank grey block in Flet 1.0.
     """
     default_col = col or {"xs": 12, "sm": 6, "lg": 3}
+    width = available_width if available_width is not None else StockWiseViewport.get()
+    wide = _side_by_side(width, FILTER_WIDE_WIDTH)
+
     wrapped: list[ft.Control] = []
     for item in items:
         control, item_col = item if isinstance(item, tuple) else (item, default_col)
-        wrapped.append(ft.Container(content=control, col=item_col))
+        if wide:
+            span = int(item_col.get("lg", item_col.get("sm", 12)))
+        else:
+            span = int(item_col.get("sm", item_col.get("xs", 12)))
+        wrapped.append(ft.Container(content=control, col=span))
     gap = T.GAP_SMALL if spacing is None else spacing
     return ft.ResponsiveRow(
         controls=wrapped,
         spacing=gap,
         run_spacing=gap,
-        breakpoints=dict(FILTER_BREAKPOINTS),
     )
+
+
+#: Below this the window cannot fit the sidebar plus a usable content column, so
+#: capping the content would leave it narrower than the window for no benefit.
+_MIN_CONTENT_WIDTH = 320
+
+
+def content_width(viewport_width: float | None, *, sidebar_width: int) -> int | None:
+    """Pixel width the content column should occupy, or ``None`` for "fill".
+
+    Flet 1.0 exposes no ``ConstrainedBox``, so ``T.MAX_CONTENT_WIDTH`` is applied
+    by giving the content container an explicit width and centring it in a row.
+    On a wide monitor this is what stops every card from becoming a wide empty
+    band; below the threshold it returns ``None`` so the content simply fills,
+    which is the behaviour for every window the app is actually used at.
+
+    ``None`` must never become a ``width`` of ``None`` inside that row: a Row
+    hands its children unbounded width, so the view's tables would overflow
+    instead of being capped.
+    """
+    if not viewport_width:
+        return None
+    available = viewport_width - sidebar_width - 2 * T.CONTENT_PADDING
+    if available <= _MIN_CONTENT_WIDTH:
+        return None
+    return int(min(available, T.MAX_CONTENT_WIDTH))
 
 
 def money_text(value, *, size: int = T.FONT_BODY, color: str | None = None,

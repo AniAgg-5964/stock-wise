@@ -171,9 +171,9 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         # --- KPI cards ---
         kpi_holder.controls = [
             kpi_strip([
-                KpiMetric(t("metric.avg_daily_demand"), f"{result.average_daily_demand:.1f}",
+                KpiMetric(t("metric.avg_daily_demand"), f"{result.average_daily_demand:g}",
                           caption=t("cap.units_day"), icon=ft.Icons.TIMELINE),
-                KpiMetric(t("metric.forecast_next", days=len(result.points)), f"{result.total_qty:.0f}",
+                KpiMetric(t("metric.forecast_next", days=len(result.points)), f"{result.total_qty:g}",
                           caption=t("cap.units_expected"), icon=ft.Icons.STACKED_LINE_CHART,
                           accent=T.ACCENT),
                 KpiMetric(t("metric.observed_days"), str(result.observed_days),
@@ -189,13 +189,13 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         # --- Notes ---
         notes: list[ft.Control] = []
         if result.insufficient_data:
-            notes.append(banner(result.note or t("forecast.insufficient_history"),
+            notes.append(banner(result.note or "Insufficient history for a reliable forecast.",
                                 "warning"))
         elif result.is_baseline:
             notes.append(banner(
-                # ``result.note`` is domain text written at generation time, so it
-                # stays English; the app's own fallback must not.
-                result.note or t("forecast.baseline_note"),
+                result.note
+                or "Transparent baseline forecast. A trained model is used automatically once "
+                   "it beats the baseline on holdout data.",
                 "info",
             ))
         note_holder.controls = notes
@@ -204,14 +204,8 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         series = app.forecast_service.demand_series(pid)
         history = series[-21:]
         hist_vals = [p.quantity for p in history]
-        # Stored forecasts are anchored to the day they were generated, so on a
-        # later viewing day their window overlaps the observed history and the
-        # x-axis prints duplicate dates. Show only the days not yet observed.
-        last_observed = history[-1].date if history else None
-        points = [p for p in result.points
-                  if last_observed is None or p.target_date > last_observed]
-        fc_vals = [p.predicted_qty for p in points]
-        labels = [_day_label(p.date) for p in history] + [_day_label(p.target_date) for p in points]
+        fc_vals = [p.predicted_qty for p in result.points]
+        labels = [_day_label(p.date) for p in history] + [_day_label(p.target_date) for p in result.points]
         chart_holder.controls = [
             chart_legend([(t("chart.history"), T.PRIMARY), (t("chart.forecast"), T.ACCENT)]),
             bar_chart(hist_vals + fc_vals, labels, forecast_from=len(hist_vals)),

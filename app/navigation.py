@@ -175,62 +175,36 @@ def _nav_item(
     )
 
 
-def _store_card(collapsed: bool, shop_name: str) -> ft.Control:
+def _offline_status(collapsed: bool) -> ft.Control:
+    """The offline indicator at the foot of the sidebar.
+
+    This used to be a card that repeated the shop name, 248px from the top bar's
+    shop card showing the identical words — the app said "Sharma General Store"
+    twice on one screen. The top bar keeps the identity; this keeps the one thing
+    it does not say, which is that the app is running locally.
+
+    It is also a row rather than a card now. A filled, bordered, rounded box
+    around a single line of status is the surface rule broken again, one region
+    smaller.
+    """
     if collapsed:
         return ft.Container(
             padding=ft.Padding.only(bottom=18),
             alignment=ft.Alignment.CENTER,
+            tooltip=t("brand.offline"),
             content=ft.Container(
-                width=42,
-                height=42,
-                border_radius=T.RADIUS_SMALL,
-                bgcolor=T.SIDEBAR_CARD_BG,
-                alignment=ft.Alignment.CENTER,
-                tooltip=shop_name,
-                content=ft.Icon(ft.Icons.STOREFRONT_OUTLINED, size=20, color=T.SIDEBAR_TEXT_ACTIVE),
+                width=10, height=10, border_radius=5, bgcolor=T.STATUS_HEALTHY,
             ),
         )
     return ft.Container(
-        margin=ft.Margin.symmetric(horizontal=14, vertical=14),
-        padding=ft.Padding.symmetric(horizontal=14, vertical=13),
-        border_radius=T.RADIUS_SMALL,
-        bgcolor=T.SIDEBAR_CARD_BG,
-        content=ft.Column(
-            spacing=10,
+        padding=ft.Padding.symmetric(horizontal=20, vertical=14),
+        content=ft.Row(
+            spacing=8,
+            alignment=ft.MainAxisAlignment.CENTER,
             controls=[
-                ft.Row(
-                    spacing=10,
-                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[
-                        ft.Container(
-                            width=36,
-                            height=36,
-                            border_radius=T.RADIUS_SMALL,
-                            bgcolor=ft.Colors.with_opacity(0.18, T.BG_CARD),
-                            alignment=ft.Alignment.CENTER,
-                            content=ft.Icon(ft.Icons.STOREFRONT_OUTLINED, size=18,
-                                            color=T.SIDEBAR_TEXT_ACTIVE),
-                        ),
-                        ft.Column(
-                            spacing=1,
-                            expand=True,
-                            controls=[
-                                ft.Text(shop_name, size=T.FONT_SMALL, weight=ft.FontWeight.W_600,
-                                        color=T.SIDEBAR_TEXT_ACTIVE, no_wrap=True,
-                                        overflow=ft.TextOverflow.ELLIPSIS),
-                                ft.Text(t("brand.single_store"), size=T.FONT_TINY, color=T.SIDEBAR_MUTED),
-                            ],
-                        ),
-                    ],
-                ),
-                ft.Row(
-                    spacing=8,
-                    controls=[
-                        ft.Container(width=8, height=8, border_radius=4, bgcolor=T.STATUS_HEALTHY),
-                        ft.Text(t("brand.offline"), size=T.FONT_TINY, color=T.SIDEBAR_TEXT,
-                                weight=ft.FontWeight.W_500),
-                    ],
-                ),
+                ft.Container(width=8, height=8, border_radius=4, bgcolor=T.STATUS_HEALTHY),
+                ft.Text(t("brand.offline"), size=T.FONT_TINY, color=T.SIDEBAR_TEXT,
+                        weight=ft.FontWeight.W_500),
             ],
         ),
     )
@@ -278,7 +252,7 @@ def build_sidebar(
                 # Scrollable: the grouped list is taller than a 768px window at
                 # its smallest, and the window can be resized down further.
                 ft.Column(spacing=0, controls=groups, scroll=ft.ScrollMode.AUTO, expand=True),
-                _store_card(collapsed, shop_name()),
+                _offline_status(collapsed),
             ],
         ),
     )

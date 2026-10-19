@@ -20,6 +20,7 @@ from ui.components.chart import (
     _sample_steps,
     area_chart,
     bar_chart,
+    nice_axis_max,
 )
 
 # Deliberately spiky: flat ramps would hide a stepped curve.
@@ -112,7 +113,74 @@ def test_a_flat_series_renders_flat_without_dividing_by_zero():
     the answer is a constant height below the plot top, not the plot height."""
     pixels = _pixels([3.0, 3.0, 3.0])
     assert len(set(pixels)) == 1, f"expected one flat height, got {set(pixels)}"
-    assert pixels[0] == max(1, round(PLOT_HEIGHT / 1.15))
+    assert pixels[0] < PLOT_HEIGHT, "a flat series should keep headroom below the top"
+
+
+class TestNiceAxis:
+    """The 81 / 61 / 41 / 20 / 0 defect.
+
+    The axis used to be ``peak * 1.15`` with ticks at quarters of it, so the
+    labels inherited whatever the headroom factor produced. A rounded axis keeps
+    every gridline label a round number.
+    """
+
+    @staticmethod
+    def _labels(peak: float, divisions: int = 4) -> list[float]:
+        axis = nice_axis_max(peak)
+        return [axis * (divisions - i) / divisions for i in range(divisions + 1)]
+
+    def test_every_gridline_label_is_whole(self):
+        for peak in (3, 7, 12, 41, 70, 93, 400, 1234, 29209, 1_200_000):
+            for label in self._labels(peak):
+                assert abs(label - round(label)) < 1e-6, (
+                    f"peak {peak} produced a fractional label {label}"
+                )
+
+    def test_labels_are_round_rather_than_arbitrary(self):
+        """The exact peak that produced 81 / 61 / 41 / 20 / 0 on the dashboard."""
+        labels = self._labels(70 * 1.15)
+        assert all(abs(v - round(v)) < 1e-6 for v in labels)
+        assert labels[0] > 70 * 1.15 - 1e-6, "the axis should still reserve headroom"
+
+    def test_the_axis_never_cuts_off_the_peak(self):
+        for peak in (3, 7, 12, 41, 70, 93, 400, 1234, 29209):
+            assert nice_axis_max(peak) >= peak
+
+    def test_a_flat_or_empty_series_still_has_an_axis(self):
+        assert nice_axis_max(0) > 0
+        assert nice_axis_max(-5) > 0
+
+
+def test_the_tallest_bar_keeps_headroom():
+    """Bars are measured against the rounded axis, not against the tallest bar, so
+    a one-day series does not fill the plot from edge to edge."""
+    chart = bar_chart([100.0], ["16"])
+    bars = [
+        c for c in _walk(chart)
+        if isinstance(c, ft.Container) and isinstance(c.height, int) and c.height > 3
+        and getattr(c, "border_radius", None) is not None
+    ]
+    assert bars, "expected at least one bar"
+    assert bars[0].height < 190, "the only bar filled the whole plot height"
+
+
+def test_a_single_point_is_a_bar_not_a_full_width_slab():
+    """The demo data puts every sale on one date, so this is the series Reports
+    actually renders. A stretched cell would span the entire chart."""
+    chart = bar_chart([1234.0], ["16"])
+    cells = list(chart.controls)
+    assert len(cells) == 1
+    assert cells[0].expand is not True, "a single bar must not expand to fill the row"
+    assert cells[0].width is not None, "a single bar needs a fixed width"
+    assert chart.alignment == ft.MainAxisAlignment.CENTER
+
+
+def test_a_long_series_still_fills_the_width():
+    """Fixing the short case must not leave a 30-day chart as a cluster in the
+    middle of the panel."""
+    chart = bar_chart([float(v) for v in range(1, 31)])
+    assert all(c.expand is True for c in chart.controls)
+    assert chart.alignment == ft.MainAxisAlignment.START
 
 
 def test_slice_count_stays_bounded_for_long_series():
