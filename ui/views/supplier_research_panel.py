@@ -56,8 +56,7 @@ def _status_notice(status) -> list[ft.Control]:
         )]
     if not status.enabled:
         return [banner(
-            "Live research is switched off. Turn on 'Enable live web research' to "
-            "search and fetch supplier pages. Nothing leaves this machine while it is off.",
+            t("note.research_off_full"),
             "info",
         )]
     return []
@@ -199,7 +198,7 @@ def build_research_panel(
                     empty_message=t("empty.no_candidates"),
                 ),
                 ft.Text(
-                    "A greyed note under a site means it usually refuses automated "
+                    t("note.bot_hostile_prefix") + " "
                     "fetches — you can still try it, and the batch button skips those.",
                     size=T.FONT_TINY, color=T.TEXT_TERTIARY,
                 ),
@@ -232,7 +231,7 @@ def build_research_panel(
                     empty_message=t("empty.no_candidate_facts"),
                 ),
                 ft.Text(
-                    "Confidence reflects how explicitly the page stated the value, "
+                    t("note.confidence_prefix") + " "
                     "not whether the value is correct. Always check before applying.",
                     size=T.FONT_TINY, color=T.TEXT_TERTIARY,
                 ),
@@ -442,5 +441,5 @@ def build_research_panel(
     return section(
         t("panel.live_research"),
         ft.Column(spacing=T.GAP_SMALL, controls=[toggle, body_holder]),
-        subtitle="TinyFish Search + Fetch (free tier) \u00b7 facts stay advisory until you apply them",
+        subtitle=t("note.tinyfish_footer"),
     )

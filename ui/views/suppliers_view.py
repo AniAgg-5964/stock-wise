@@ -31,7 +31,7 @@ def build_suppliers_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
 
     header = page_header(
         t("nav.suppliers"),
-        "Directory of suppliers and how products are sourced",
+        t("dashboard.suppliers_subtitle"),
         actions=[ft.Button(content=t("action.add_supplier"), icon=ft.Icons.ADD,
                            on_click=lambda e: _open_add_supplier(page, navigate))],
     )
@@ -50,7 +50,8 @@ def build_suppliers_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
     ]
     supplier_panel = section(
         t("panel.supplier_directory"),
-        styled_table(["Name", "Contact", t("field.phone"), t("field.email"), "Status", ""], supplier_rows,
+        styled_table([t("col.name"), t("col.contact"), t("field.phone"), t("field.email"),
+         t("field.status"), ""], supplier_rows,
                      empty_message=t("empty.no_suppliers")),
     )
 
@@ -75,11 +76,13 @@ def build_suppliers_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
             text_cell(f"{link.lead_time_days} d", color=T.TEXT_SECONDARY),
             text_cell(str(link.minimum_order_qty), color=T.TEXT_SECONDARY),
             text_cell(str(link.pack_size), color=T.TEXT_SECONDARY),
-            chip_cell("Preferred", "healthy") if link.is_preferred else chip_cell("Backup", "neutral"),
+            chip_cell(t("status.preferred"), "healthy") if link.is_preferred
+            else chip_cell(t("status.backup"), "neutral"),
         ]))
     sourcing_panel = section(
         t("panel.product_sourcing"),
-        styled_table([t("col.product"), t("col.supplier_name"), "Lead time", "MOQ", "Pack", "Role"], sourcing_rows,
+        styled_table([t("col.product"), t("col.supplier_name"), t("col.lead_time"), t("col.moq"),
+         t("col.pack"), t("col.role")], sourcing_rows,
                      empty_message=t("empty.no_supplier_products")),
         subtitle=t("note.advisory_reorder"),
     )

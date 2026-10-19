@@ -121,7 +121,7 @@ def build_import_export_view(page: ft.Page, navigate: Callable[[str], None]) -> 
             ]),
             products_preview,
         ]),
-        subtitle="Columns: sku, name, category, unit, brand, cost_price, selling_price, reorder_point, safety_stock, expiry_tracking, opening_stock, supplier \u2026",
+        subtitle=t("columns.products"),
     )
 
     sales_panel = section(
@@ -149,7 +149,7 @@ def build_import_export_view(page: ft.Page, navigate: Callable[[str], None]) -> 
             ]),
             sales_preview,
         ]),
-        subtitle="Columns: sold_at, sku, quantity, unit_price, source, external_ref \u00b7 duplicates and oversells are skipped",
+        subtitle=t("columns.sales"),
     )
 
     export_panel = section(
@@ -166,11 +166,11 @@ def build_import_export_view(page: ft.Page, navigate: Callable[[str], None]) -> 
                 {"xs": 12, "sm": 6, "lg": 3},
             ),
         ]),
-        subtitle=f"Files are written to {EXPORT_DIR}",
+        subtitle=t("exports.location", path=EXPORT_DIR),
     )
 
     return scroll_column([
-        page_header("Reports & Data", "Import and export CSV data"),
+        page_header(t("nav.data"), t("dashboard.data_subtitle")),
         products_panel,
         sales_panel,
         export_panel,

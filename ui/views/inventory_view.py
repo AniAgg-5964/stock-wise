@@ -23,22 +23,26 @@ from ui.components.kpi_card import KpiMetric, kpi_strip
 from ui.components.layout import flow_row, page_header, scroll_column, section
 from ui.components.table import action_cell, chip_cell, entity_cell, styled_table, text_cell
 
-_STATUS_FILTERS = [
-    ("all", "All products"),
-    ("low", "Low stock"),
-    ("out_of_stock", "Out of stock"),
-    ("near_expiry", "Near expiry"),
-    ("expired", "Expired"),
-]
+def _status_filters() -> list[tuple[str, str]]:
+    """Built per call so the labels follow the active language."""
+    return [
+        ("all", t("filter.all_products")),
+        ("low", t("status.low_stock_filter")),
+        ("out_of_stock", t("status.out_of_stock")),
+        ("near_expiry", t("status.near_expiry")),
+        ("expired", t("status.expired")),
+    ]
 
-_STATUS_LABELS = {
-    "healthy": "In stock",
-    "low": "Low stock",
-    "out_of_stock": "Out of stock",
-    "near_expiry": "Near expiry",
-    "expired": "Expired",
-    "at_risk": "At risk",
-}
+def _status_labels() -> dict[str, str]:
+    """Per call so a language switch reaches chips built after the switch."""
+    return {
+        "healthy": t("status.in_stock"),
+        "low": t("status.low_stock_filter"),
+        "out_of_stock": t("status.out_of_stock"),
+        "near_expiry": t("status.near_expiry"),
+        "expired": t("status.expired"),
+        "at_risk": t("status.at_risk"),
+    }
 
 _CATEGORY_EMOJI = {
     "dairy": "\U0001F95B",
@@ -126,7 +130,7 @@ def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
                     text_cell(f"{snap.usable_stock:g} {product.unit}", color=stock_color,
                               weight=ft.FontWeight.W_600),
                     text_cell(format_money(product.selling_price), color=T.TEXT_SECONDARY),
-                    chip_cell(_STATUS_LABELS.get(snap.status, snap.status), snap.status),
+                    chip_cell(_status_labels().get(snap.status, snap.status), snap.status),
                     action_cell(lambda e, pid=product.id: navigate(f"/product/{pid}"),
                                 tooltip=t("action.view_all")),
                 ])
@@ -134,16 +138,17 @@ def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
 
         table_holder.controls = [
             styled_table(
-                ["Product", "SKU", t("field.category"), "Stock", "Price", t("field.status"), ""],
+                [t("col.product"), t("col.sku"), t("field.category"), t("col.stock"), t("col.price"),
+                 t("field.status"), ""],
                 rows, empty_message=t("empty.no_filters"),
             )
         ]
-        count_text.value = f"{len(rows)} of {len(products)} products"
+        count_text.value = t("table.of_products", shown=len(rows), total=len(products))
         if update:
             table_holder.update()
 
     categories = app.product_service.list_categories()
-    category_options = [("__all__", "All categories")] + [(c, c) for c in categories]
+    category_options = [("__all__", t("filter.all_categories"))] + [(c, c) for c in categories]
 
     search = search_field(t("field.search_products"), width=280,
                           on_change=lambda e: (state.update(search=e.control.value), render_table()))
@@ -153,7 +158,7 @@ def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
                                   state.update(category=None if e.control.value == "__all__" else e.control.value),
                                   render_table(),
                               ))
-    status = dropdown_field(t("field.status"), _STATUS_FILTERS, value="all", width=190, dense=True,
+    status = dropdown_field(t("field.status"), _status_filters(), value="all", width=190, dense=True,
                             on_select=lambda e: (state.update(status=e.control.value or "all"), render_table()))
 
     render_table(update=False)
@@ -166,23 +171,23 @@ def build_inventory_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.C
     out = sum(1 for s in all_snapshots if s.status == "out_of_stock")
 
     kpis = kpi_strip([
-        KpiMetric("Total Products", str(len(all_snapshots)), icon=ft.Icons.INVENTORY_2_OUTLINED,
-                  accent=T.STATUS_INFO, caption="In the catalogue"),
-        KpiMetric("Low Stock", str(low), icon=ft.Icons.WARNING_AMBER_OUTLINED,
-                  accent=T.STATUS_WARNING, caption="At or below reorder point",
+        KpiMetric(t("metric.total_products"), str(len(all_snapshots)), icon=ft.Icons.INVENTORY_2_OUTLINED,
+                  accent=T.STATUS_INFO, caption=t("cap.in_catalogue")),
+        KpiMetric(t("metric.low_stock"), str(low), icon=ft.Icons.WARNING_AMBER_OUTLINED,
+                  accent=T.STATUS_WARNING, caption=t("cap.at_or_below_reorder"),
                   delta_kind="warn" if low else "muted",
                   on_click=lambda e: _set_filter(status, state, render_table, "low")),
-        KpiMetric("Out of Stock", str(out), icon=ft.Icons.REMOVE_SHOPPING_CART_OUTLINED,
-                  accent=T.STATUS_CRITICAL, caption="Needs restocking",
+        KpiMetric(t("metric.out_of_stock"), str(out), icon=ft.Icons.REMOVE_SHOPPING_CART_OUTLINED,
+                  accent=T.STATUS_CRITICAL, caption=t("cap.needs_restocking"),
                   delta_kind="down" if out else "muted",
                   on_click=lambda e: _set_filter(status, state, render_table, "out_of_stock")),
-        KpiMetric("Categories", str(len(categories)), icon=ft.Icons.CATEGORY_OUTLINED,
-                  accent=T.ACCENT, caption="Product groups"),
+        KpiMetric(t("metric.categories"), str(len(categories)), icon=ft.Icons.CATEGORY_OUTLINED,
+                  accent=T.ACCENT, caption=t("cap.product_groups")),
     ])
 
     header = page_header(
         t("nav.inventory"),
-        "Manage your products and stock levels \u2014 add, edit or remove products and track expiry.",
+        t("dashboard.inventory_subtitle"),
         actions=[
             ft.OutlinedButton(content=t("panel.import_export"), icon=ft.Icons.SWAP_VERT,
                               on_click=lambda e: navigate("/data")),

@@ -70,6 +70,14 @@ _STATUS_LABELS = {
     "at_risk": "status.at_risk",
 }
 
+# Alert severity -> translation key for the alert chip. The severity itself is a
+# domain value ("critical"), so the chip must be translated rather than title-cased.
+_SEVERITY_LABELS = {
+    "critical": "severity.critical",
+    "warning": "severity.warning",
+    "info": "severity.info",
+}
+
 
 def build_dashboard_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Control:
     app = app_context
@@ -155,7 +163,7 @@ def _alerts_panel(alerts, navigate: Callable[[str], None]) -> ft.Control:
                 ),
                 title=alert.title,
                 subtitle=alert.message,
-                trailing=status_chip(alert.severity.title(), status),
+                trailing=status_chip(t(_SEVERITY_LABELS.get(alert.severity, "status.info")), status),
                 on_click=lambda e, r=alert.route: navigate(r),
                 divider=i < len(shown) - 1,
             )
@@ -284,7 +292,7 @@ def _top_products_panel(products, snapshots, forecasts) -> ft.Control:
         ft.DataRow(cells=[
             text_cell(name, weight=ft.FontWeight.W_500),
             text_cell(f"{total:g}", weight=ft.FontWeight.W_600),
-            ft.DataCell(status_chip(_STATUS_LABELS.get(status, status), status)),
+            ft.DataCell(status_chip(t(_STATUS_LABELS.get(status, status)), status)),
         ])
         for name, total, status in ranked[:6]
     ]

@@ -32,11 +32,18 @@ _URGENCY_STATUS = {
     "medium": "info",
     "low": "neutral",
 }
-_URGENCY_LABEL = {"critical": "Critical", "high": "High", "medium": "Medium", "low": "Low"}
+def _urgency_labels() -> dict[str, str]:
+    """Per call so a language switch reaches chips built after the switch."""
+    return {
+        "critical": t("urgency.critical"),
+        "high": t("urgency.high"),
+        "medium": t("urgency.medium"),
+        "low": t("urgency.low"),
+    }
 
 
 def _urgency_chip(reco: ReorderRecommendation) -> ft.DataCell:
-    return chip_cell(_URGENCY_LABEL.get(reco.urgency, reco.urgency), _URGENCY_STATUS.get(reco.urgency, "info"))
+    return chip_cell(_urgency_labels().get(reco.urgency, reco.urgency), _URGENCY_STATUS.get(reco.urgency, "info"))
 
 
 def _why_dialog(reco: ReorderRecommendation) -> ft.AlertDialog:
@@ -146,18 +153,18 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
 
         kpi_holder.controls = [
             kpi_strip([
-                KpiMetric("Products needing an order", str(len(recos)),
-                          caption="within the protection period",
+                KpiMetric(t("metric.needs_order"), str(len(recos)),
+                          caption=t("cap.protection_period"),
                           icon=ft.Icons.PLAYLIST_ADD_CHECK),
-                KpiMetric("Estimated purchase cost", format_money(total_cost),
-                          caption="from preferred supplier cost",
+                KpiMetric(t("metric.purchase_cost"), format_money(total_cost),
+                          caption=t("cap.supplier_cost"),
                           icon=ft.Icons.PAYMENTS_OUTLINED, accent=T.ACCENT),
-                KpiMetric("Urgent (critical + high)", str(critical),
-                          caption="order soon", icon=ft.Icons.PRIORITY_HIGH,
+                KpiMetric(t("metric.urgent"), str(critical),
+                          caption=t("cap.order_soon"), icon=ft.Icons.PRIORITY_HIGH,
                           accent=T.STATUS_CRITICAL if critical else T.STATUS_HEALTHY,
                           delta_kind="down" if critical else "muted"),
-                KpiMetric("Expiry review flagged", str(expiry_flags),
-                          caption="consider markdown/transfer",
+                KpiMetric(t("metric.expiry_flagged"), str(expiry_flags),
+                          caption=t("cap.consider_markdown"),
                           icon=ft.Icons.EVENT_BUSY_OUTLINED,
                           accent=T.STATUS_WARNING if expiry_flags else T.STATUS_HEALTHY,
                           delta_kind="warn" if expiry_flags else "muted"),
@@ -165,7 +172,7 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         ]
 
         note_holder.controls = [
-            banner("Recommendations are advisory only \u2014 nothing is ordered automatically.", "info")
+            banner(t("note.advisory"), "info")
         ] if recos else [
             banner(t("note.all_covered"), "success")
         ]
@@ -173,7 +180,7 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
         rows: list[ft.DataRow] = []
         for reco in recos:
             rows.append(ft.DataRow(cells=[
-                entity_cell(reco.product_name, reco.supplier_name or "No preferred supplier"),
+                entity_cell(reco.product_name, reco.supplier_name or t("supplier.none_preferred")),
                 _urgency_chip(reco),
                 text_cell(f"{reco.suggested_qty} {reco.unit}"),
                 text_cell(format_money(reco.estimated_cost)),
@@ -189,7 +196,8 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
 
         table_holder.controls = [
             styled_table(
-                ["Product", "Urgency", "Suggested", "Est. cost", "Stockout in", "Expiry", "", ""],
+                [t("col.product"), t("col.urgency"), t("col.suggested"), t("col.est_cost"),
+         t("col.stockout_in"), t("col.expiry"), "", ""],
                 rows, empty_message=t("empty.no_reorder"),
             )
         ]
@@ -197,7 +205,7 @@ def build_reorder_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Con
 
     header = page_header(
         t("nav.reorder"),
-        "Periodic-review recommendations (advisory \u2014 you decide)",
+        t("dashboard.reorder_subtitle"),
         actions=[
             ft.OutlinedButton(content=t("action.generate"), icon=ft.Icons.REFRESH, on_click=lambda e: render()),
         ],

@@ -102,14 +102,14 @@ def build_expiry_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Cont
             name = product.name if product else f"Product {batch.product_id}"
             left = _days_left(batch.expiry_date)
             if expired_rows:
-                label, status = "Expired", "expired"
-                left_text = f"{abs(left)}d ago" if left is not None else "\u2014"
+                label, status = t("status.expired"), "expired"
+                left_text = (t("expiry.days_ago", days=abs(left)) if left is not None else "\u2014")
             else:
-                label, status = "Near expiry", "near_expiry"
+                label, status = t("status.near_expiry"), "near_expiry"
                 left_text = f"{left}d" if left is not None else "\u2014"
             at_risk = risk_for(batch)
             risk_cell = (
-                chip_cell(f"{at_risk:g} at risk", "at_risk")
+                chip_cell(t("expiry.at_risk_qty", qty=f"{at_risk:g}"), "at_risk")
                 if at_risk > 0
                 else text_cell("0", color=T.TEXT_TERTIARY)
             )
@@ -129,20 +129,20 @@ def build_expiry_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Cont
         return rows
 
     expiring_panel = section(
-        f"Expiring within {window} days",
-        styled_table(["Product", "Batch", "Expiry", "Days left", "Remaining", "At risk (est.)",
-                      "Value", "Status", ""],
+        t("panel.expiring_window", days=window),
+        styled_table([t("col.product"), t("col.batch"), t("col.expiry"), t("col.days_left"),
+                      t("col.remaining"), t("col.at_risk"), t("col.value"), t("field.status"), ""],
                      build_rows(expiring, expired_rows=False),
                      empty_message=t("empty.no_expiring_body")),
-        subtitle="Consumption follows FEFO \u2014 earliest expiry is sold first",
+        subtitle=t("note.fefo"),
     )
     expired_panel = section(
         t("metric.already_expired"),
-        styled_table(["Product", "Batch", "Expiry", "Days over", "Remaining", "At risk (est.)",
-                      "Value", "Status", ""],
+        styled_table([t("col.product"), t("col.batch"), t("col.expiry"), t("col.days_over"),
+                      t("col.remaining"), t("col.at_risk"), t("col.value"), t("field.status"), ""],
                      build_rows(expired, expired_rows=True),
-                     empty_message="No expired batches \u2014 nice."),
-        subtitle="Not sellable \u2014 write off to keep records accurate",
+                     empty_message=t("empty.no_expired")),
+        subtitle=t("note.write_off"),
     )
 
     units_expiring = sum(b.quantity_remaining for b in expiring)
@@ -152,24 +152,25 @@ def build_expiry_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Cont
     )
 
     kpis = kpi_strip([
-        KpiMetric("Batches expiring", str(len(expiring)), icon=ft.Icons.EVENT_BUSY_OUTLINED,
-                  accent=T.STATUS_WARNING, caption=f"within {window} days",
+        KpiMetric(t("metric.batches_expiring"), str(len(expiring)), icon=ft.Icons.EVENT_BUSY_OUTLINED,
+                  accent=T.STATUS_WARNING, caption=t("cap.within_days", days=window),
                   delta_kind="warn" if expiring else "muted"),
-        KpiMetric("Units expiring", f"{units_expiring:g}", icon=ft.Icons.INVENTORY_2_OUTLINED,
-                  accent=T.STATUS_WARNING, caption="still usable"),
-        KpiMetric("Estimated value at risk", format_money(value_at_risk),
+        KpiMetric(t("metric.units_expiring"), f"{units_expiring:g}", icon=ft.Icons.INVENTORY_2_OUTLINED,
+                  accent=T.STATUS_WARNING, caption=t("cap.still_usable")),
+        KpiMetric(t("metric.value_at_risk"), format_money(value_at_risk),
                   icon=ft.Icons.CURRENCY_RUPEE, accent=T.STATUS_CRITICAL,
-                  caption="likely unrealised"),
+                  caption=t("cap.likely_unrealised")),
         KpiMetric(t("metric.already_expired"), f"{units_expired:g} units",
                   icon=ft.Icons.DELETE_SWEEP_OUTLINED,
                   accent=T.STATUS_CRITICAL if units_expired else T.STATUS_HEALTHY,
-                  caption="not sellable",
+                  caption=t("cap.not_sellable"),
                   delta_kind="down" if units_expired else "muted"),
     ])
 
     header = page_header(
         t("nav.expiry"),
-        f"{len(expiring)} batches expiring \u00b7 {len(expired)} expired \u00b7 {units_expiring + units_expired:g} units affected",
+        t("expiry.summary", batches=len(expiring), expired=len(expired),
+                                units=units_expiring + units_expired),
         actions=[ft.OutlinedButton(content=t("action.refresh"), icon=ft.Icons.REFRESH,
                                    on_click=lambda e: navigate("/expiry"))],
     )
@@ -188,7 +189,7 @@ def build_expiry_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Cont
 def _open_waste(page: ft.Page, navigate: Callable[[str], None], batch, product) -> None:
     app = app_context
     quantity = text_field(t("field.quantity_waste"), value=f"{batch.quantity_remaining:g}")
-    reason = text_field(t("field.reason_waste"), value="Expired")
+    reason = text_field(t("field.reason_waste"), value=t("status.expired"))
     product_name = product.name if product else f"Product {batch.product_id}"
 
     def save(e) -> None:

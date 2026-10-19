@@ -26,15 +26,18 @@ from ui.components.layout import page_header, panel_grid, scroll_column, section
 from ui.components.status_chip import status_chip
 from ui.components.table import chip_cell, styled_table, text_cell
 
-_MOVEMENT_LABELS = {
-    "opening_stock": "Opening stock",
-    "purchase_receipt": "Receipt",
-    "sale": "Sale",
-    "return": "Return",
-    "waste": "Waste",
-    "adjustment": "Adjustment",
-    "correction": "Correction",
-}
+def _movement_labels() -> dict[str, str]:
+    """Per call: a module-level ``t()`` freezes the import-time language, so a
+    language switch would never reach this ledger."""
+    return {
+        "opening_stock": t("field.opening_stock"),
+        "purchase_receipt": t("movement.purchase_receipt"),
+        "sale": t("movement.sale"),
+        "return": t("movement.return"),
+        "waste": t("movement.waste"),
+        "adjustment": t("movement.adjustment"),
+        "correction": t("movement.correction"),
+    }
 
 
 def _dec(value: str, default: str = "0") -> Decimal:
@@ -90,28 +93,29 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
         for b in batches if b.quantity_remaining > 0
     )
     kpis = kpi_strip([
-        KpiMetric("Usable stock", f"{snapshot.usable_stock:g}", caption=f"in {product.unit}",
+        KpiMetric(t("metric.usable_stock"), f"{snapshot.usable_stock:g}", caption=t("cap.in_unit", unit=product.unit),
                   accent=T.STATUS_HEALTHY),
-        KpiMetric("On hand (ledger)", f"{snapshot.stock_level:g}", caption="physical units",
+        KpiMetric(t("metric.on_hand"), f"{snapshot.stock_level:g}", caption=t("cap.physical_units"),
                   accent=T.STATUS_INFO),
-        KpiMetric("Batches", str(snapshot.batch_count), caption="active batches",
+        KpiMetric(t("metric.batches"), str(snapshot.batch_count), caption=t("cap.active_batches"),
                   accent=T.PRIMARY),
-        KpiMetric("Stock value", format_money(stock_value), caption="at batch cost",
+        KpiMetric(t("metric.stock_value"), format_money(stock_value), caption=t("cap.batch_cost"),
                   accent=T.STATUS_WARNING),
     ])
 
     details = section(
         t("panel.product_details"),
         ft.Column(spacing=T.GAP_SMALL, controls=[
-            _detail_row("Status", status_chip(_status_label(snapshot.status), snapshot.status)),
+            _detail_row(t("field.status"), status_chip(_status_label(snapshot.status), snapshot.status)),
             _detail_row(t("field.brand"), ft.Text(product.brand or "\u2014", color=T.TEXT_PRIMARY)),
             _detail_row(t("field.unit"), ft.Text(product.unit, color=T.TEXT_PRIMARY)),
             _detail_row(t("field.cost_price"), ft.Text(format_money(product.cost_price), color=T.TEXT_PRIMARY)),
             _detail_row(t("field.selling_price"), ft.Text(format_money(product.selling_price), color=T.TEXT_PRIMARY)),
             _detail_row(t("field.reorder_point"), ft.Text(str(product.reorder_point), color=T.TEXT_PRIMARY)),
             _detail_row(t("field.safety_stock"), ft.Text(str(product.safety_stock), color=T.TEXT_PRIMARY)),
-            _detail_row("Expiry tracking", ft.Text(t("field.active") if product.expiry_tracking else "Off", color=T.TEXT_PRIMARY)),
-            _detail_row("Nearest expiry", ft.Text(snapshot.nearest_expiry or "\u2014", color=T.TEXT_PRIMARY)),
+            _detail_row(t("detail.expiry_tracking"), ft.Text(t("field.active") if product.expiry_tracking else t("common.off"),
+                        color=T.TEXT_PRIMARY)),
+            _detail_row(t("detail.nearest_expiry"), ft.Text(snapshot.nearest_expiry or "\u2014", color=T.TEXT_PRIMARY)),
         ]),
         expand=True,
     )
@@ -122,7 +126,8 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
                 ft.Text(supplier.name, size=T.FONT_BODY, color=T.TEXT_PRIMARY,
                         weight=ft.FontWeight.W_500),
                 ft.Text(
-                    f"Lead {link.lead_time_days}d \u00b7 MOQ {link.minimum_order_qty} \u00b7 pack {link.pack_size}",
+                    t("supplier.lead_moq_pack", lead=link.lead_time_days,
+                        moq=link.minimum_order_qty, pack=link.pack_size),
                     size=T.FONT_TINY, color=T.TEXT_TERTIARY,
                 ),
             ]),
@@ -148,14 +153,15 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
     ]
     batches_panel = section(
         t("panel.batch_fefo"),
-        styled_table([t("field.batch"), "Received", "Expiry", "Received qty", "Remaining", "Unit cost", "Status"],
+        styled_table([t("field.batch"), t("col.received"), t("col.expiry"), t("col.received_qty"),
+         t("col.remaining"), t("col.unit_cost"), t("field.status")],
                      batch_rows, empty_message=t("empty.no_movements_body")),
     )
 
     movement_rows = [
         ft.DataRow(cells=[
             text_cell((m.occurred_at or "")[:19], color=T.TEXT_SECONDARY),
-            text_cell(_MOVEMENT_LABELS.get(m.movement_type, m.movement_type)),
+            text_cell(_movement_labels().get(m.movement_type, m.movement_type)),
             text_cell(f"{m.quantity_delta:+g}",
                       color=T.STATUS_HEALTHY if m.quantity_delta >= 0 else T.STATUS_CRITICAL),
             text_cell(f"{m.balance_after:g}"),
@@ -165,9 +171,9 @@ def build_product_detail_view(page: ft.Page, navigate: Callable[[str], None], pr
     ]
     movements_panel = section(
         t("panel.movement_ledger"),
-        styled_table(["When", "Type", "Change", "Balance", "Reason"], movement_rows,
+        styled_table([t("col.when"), t("col.type"), t("col.change"), t("col.balance"), t("col.reason")], movement_rows,
                      empty_message=t("empty.no_movements")),
-        subtitle="Append-only \u2014 corrections are new records, never rewrites",
+        subtitle=t("note.ledger_append_only"),
     )
 
     return scroll_column([
@@ -188,20 +194,21 @@ def _detail_row(label: str, control: ft.Control) -> ft.Control:
 
 def _status_label(status: str) -> str:
     return {
-        "healthy": "Healthy", "low": "Low", "out_of_stock": "Out of stock",
-        "near_expiry": "Near expiry", "expired": "Expired", "at_risk": "At risk",
+        "healthy": t("status.healthy"), "low": t("status.low"),
+        "out_of_stock": t("status.out_of_stock"), "near_expiry": t("status.near_expiry"),
+        "expired": t("status.expired"), "at_risk": t("status.at_risk"),
     }.get(status, status)
 
 
 def _batch_status(expiry: str | None) -> tuple[str, str]:
     if not expiry:
-        return "No expiry", "neutral"
+        return t("detail.no_expiry"), "neutral"
     today = date.today()
     if expiry < today.isoformat():
         return "Expired", "expired"
     if expiry <= (today + timedelta(days=7)).isoformat():
         return "Near expiry", "near_expiry"
-    return "OK", "healthy"
+    return t("status.ok"), "healthy"
 
 
 # --------------------------------------------------------------------------- dialogs

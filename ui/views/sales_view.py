@@ -23,7 +23,9 @@ from ui.components.forms import dropdown_field, text_field
 from ui.components.layout import flow_row, page_header, scroll_column, section
 from ui.components.table import action_cell, styled_table, text_cell
 
-_SOURCE_LABELS = {"manual": "Manual", "csv_import": "CSV import"}
+def _source_labels() -> dict[str, str]:
+    """Per call so a language switch reaches the ledger."""
+    return {"manual": t("sale.source_manual"), "csv_import": t("sale.source_csv")}
 
 
 def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Control:
@@ -48,7 +50,7 @@ def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Contr
             for idx, line in enumerate(cart)
         ]
         cart_holder.controls = [
-            styled_table([t("col.product"), "Qty", "Unit price", "Line total", ""], rows,
+            styled_table([t("col.product"), t("col.qty"), t("col.unit_price"), t("col.line_total"), ""], rows,
                          empty_message=t("empty.cart"))
         ]
         total = sum((to_money(l["price"]) * Decimal(str(l["qty"])) for l in cart), Decimal("0"))
@@ -63,7 +65,8 @@ def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Contr
 
     product_dd = dropdown_field(
         t("col.product"),
-        [(str(p.id), f"{p.name} \u00b7 {usable[p.id]:g} usable") for p in products]
+        [(str(p.id), f"{p.name} " + t("sale.usable_suffix", qty=f"{usable[p.id]:g}"))
+         for p in products]
         or [("__none__", "No products yet")],
         value=str(products[0].id) if products else "__none__", width=340,
         on_select=lambda e: _prefill_price(e, price_by_id, price_field),
@@ -144,7 +147,7 @@ def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Contr
         ft.DataRow(cells=[
             text_cell(f"#{sale.id}"),
             text_cell((sale.sold_at or "")[:19], color=T.TEXT_SECONDARY),
-            text_cell(_SOURCE_LABELS.get(sale.source, sale.source), color=T.TEXT_SECONDARY),
+            text_cell(_source_labels().get(sale.source, sale.source), color=T.TEXT_SECONDARY),
             text_cell(str(len(sale.items)), color=T.TEXT_SECONDARY),
             text_cell(format_money(sale.total_amount)),
             text_cell(sale.external_ref or "\u2014", color=T.TEXT_TERTIARY),
@@ -153,9 +156,10 @@ def build_sales_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Contr
     ]
     recent_panel = section(
         t("panel.recent_sales"),
-        styled_table(["Sale", "When", "Source", "Items", t("label.total"), "Reference"], recent_rows,
+        styled_table([t("col.sale"), t("col.when"), t("col.source"), t("col.items"), t("label.total"),
+         t("col.reference")], recent_rows,
                      empty_message=t("empty.no_sales")),
-        subtitle=f"Latest {len(recent_rows)} sales",
+        subtitle=t("panel.latest_sales", count=len(recent_rows)),
     )
 
     return scroll_column([

@@ -12,6 +12,7 @@ import logging
 from datetime import date
 
 from app.config import Config
+from app.i18n import t
 from application.dto import Alert
 
 logger = logging.getLogger(__name__)
@@ -71,14 +72,17 @@ class AlertsService:
         for snap in snapshots:
             if snap.status == "out_of_stock":
                 alerts.append(Alert(
-                    "out_of_stock", "critical", f"{snap.product.name} is out of stock",
-                    f"No usable stock \u00b7 reorder point {snap.product.reorder_point}",
+                    "out_of_stock", "critical",
+                    t("alert.out_of_stock", name=snap.product.name),
+                    t("alert.no_usable", point=snap.product.reorder_point),
                     "/inventory", snap.product.id,
                 ))
             elif snap.status == "low":
                 alerts.append(Alert(
-                    "low_stock", "warning", f"{snap.product.name} is low",
-                    f"Usable {snap.usable_stock:g} \u00b7 reorder point {snap.product.reorder_point}",
+                    "low_stock", "warning",
+                    t("alert.low_stock", name=snap.product.name),
+                    t("alert.usable_point", usable=snap.usable_stock,
+                      point=snap.product.reorder_point),
                     "/inventory", snap.product.id,
                 ))
         return alerts
@@ -90,14 +94,18 @@ class AlertsService:
             product = self.products.get_by_id(batch.product_id)
             name = product.name if product else f"Product {batch.product_id}"
             left = _days_left(batch.expiry_date)
-            detail = f"{batch.quantity_remaining:g} units \u00b7 batch {batch.batch_code or batch.id}"
+            detail = t("alert.batch_detail", qty=batch.quantity_remaining,
+                                      batch=batch.batch_code or batch.id)
             if left is not None and left < 0:
                 alerts.append(Alert(
-                    "expired", "critical", f"{name} expired {abs(left)}d ago",
-                    f"{detail} \u00b7 not sellable, write off", "/expiry", batch.product_id,
+                    "expired", "critical",
+                    t("alert.expired_ago", name=name, days=abs(left)),
+                    t("alert.not_sellable_write_off", detail=detail),
+                    "/expiry", batch.product_id,
                 ))
             else:
-                title = f"{name} expires in {left}d" if left is not None else f"{name} near expiry"
+                title = (t("alert.expires_in", name=name, days=left) if left is not None
+                         else t("alert.near_expiry", name=name))
                 alerts.append(Alert(
                     "near_expiry", "warning", title, detail, "/expiry", batch.product_id,
                 ))
@@ -107,8 +115,8 @@ class AlertsService:
             if at_risk > 0:
                 alerts.append(Alert(
                     "expiry_risk", "warning",
-                    f"{at_risk:g} {product.unit} of {product.name} may expire",
-                    "Likely unsold before expiry \u2014 consider markdown or transfer",
+                    t("alert.at_risk", at_risk=at_risk, unit=product.unit, name=product.name),
+                    t("alert.unsold_markdown"),
                     "/expiry", product.id,
                 ))
         return alerts
@@ -145,8 +153,9 @@ class AlertsService:
             if recent >= _DEMAND_SPIKE_MIN_AVG and forecast_avg > recent * _DEMAND_SPIKE_RATIO:
                 pct = (forecast_avg / recent - 1.0) * 100.0
                 alerts.append(Alert(
-                    "demand_spike", "info", f"Demand rising for {product.name}",
-                    f"Forecast {forecast_avg:.1f}/day vs recent {recent:.1f}/day (+{pct:.0f}%)",
+                    "demand_spike", "info",
+                    t("alert.demand_rising", name=product.name),
+                    t("alert.demand_rising_msg", pct=pct),
                     "/forecasting", product.id,
                 ))
         return alerts

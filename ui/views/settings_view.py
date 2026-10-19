@@ -20,20 +20,26 @@ from ui.components.forms import dropdown_field, text_field
 from ui.components.layout import flow_row, page_header, panel_grid, scroll_column, section
 from ui.components.table import action_cell, styled_table, text_cell
 
-_BASELINE_OPTIONS = [
-    ("best", "Best baseline per product"),
-    ("seasonal_naive", "Seasonal naive (same weekday)"),
-    ("moving_average", "7-day moving average"),
-    ("mean", "Average demand"),
+def _baseline_options() -> list[tuple[str, str]]:
+    """Per call: ``t()`` at import time would freeze the import-time language."""
+    return [
+    ("best", t("opt.baseline_best")),
+    ("seasonal_naive", t("opt.baseline_seasonal")),
+    ("moving_average", t("opt.baseline_moving")),
+    ("mean", t("opt.baseline_mean")),
 ]
 
-_SAFETY_POLICY_OPTIONS = [
-    ("heuristic", "Heuristic (average demand x buffer days)"),
-    ("statistical", "Statistical (service level x variability)"),
+
+def _safety_policy_options() -> list[tuple[str, str]]:
+    return [
+    ("heuristic", t("opt.policy_heuristic")),
+    ("statistical", t("opt.policy_statistical")),
 ]
 
-_SERVICE_LEVEL_OPTIONS = [
-    ("0.80", "80%"), ("0.85", "85%"), ("0.90", "90% (default)"),
+
+def _service_level_options() -> list[tuple[str, str]]:
+    return [
+    ("0.80", "80%"), ("0.85", "85%"), ("0.90", "90% (" + t("opt.default") + ")"),
     ("0.95", "95%"), ("0.98", "98%"), ("0.99", "99%"),
 ]
 
@@ -59,13 +65,13 @@ def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Co
 
     policy_fields = {
         "forecast_baseline_method": dropdown_field(
-            t("field.baseline_fallback"), _BASELINE_OPTIONS,
+            t("field.baseline_fallback"), _baseline_options(),
             value=settings.get("forecast_baseline_method", "best"), width=320),
         "safety_policy": dropdown_field(
-            t("field.safety_policy"), _SAFETY_POLICY_OPTIONS,
+            t("field.safety_policy"), _safety_policy_options(),
             value=settings.get("safety_policy", "heuristic"), width=340),
         "service_level": dropdown_field(
-            t("field.service_level"), _SERVICE_LEVEL_OPTIONS,
+            t("field.service_level"), _service_level_options(),
             value=settings.get("service_level", "0.90"), width=320),
     }
 
@@ -119,7 +125,7 @@ def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Co
             ft.Button(content=t("action.backup_now"), icon=ft.Icons.CLOUD_UPLOAD_OUTLINED, on_click=backup_now),
             styled_table(["Backup file", "Size", ""], backup_rows, empty_message=t("empty.no_backups")),
         ]),
-        subtitle=f"Saved to {Config.BACKUP_DIR}",
+        subtitle=t("diag.saved_to", path=Config.BACKUP_DIR),
     )
 
     model = app.forecast_service.model_status()
@@ -145,11 +151,11 @@ def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Co
     model_panel = section(
         t("panel.forecast_model"),
         ft.Column(spacing=T.GAP_SMALL, controls=[
-            _kv("Status", "Adopted" if model.get("adopted") else
-                ("Candidate (not adopted)" if model.get("artifact_present") else "No trained model")),
-            _kv("Version", model.get("version") or "\u2014"),
-            _kv("Holdout WAPE", f"{wape:.1%}" if isinstance(wape, (int, float)) else "\u2014"),
-            _kv("Model folder", model.get("model_dir") or str(Config.MODEL_DIR)),
+            _kv(t("field.status"), t("status.adopted_cap") if model.get("adopted") else
+                (t("status.candidate_cap") if model.get("artifact_present") else t("status.no_model"))),
+            _kv(t("diag.version"), model.get("version") or "\u2014"),
+            _kv(t("diag.holdout_wape"), f"{wape:.1%}" if isinstance(wape, (int, float)) else "\u2014"),
+            _kv(t("diag.model_folder"), model.get("model_dir") or str(Config.MODEL_DIR)),
             ft.Text(t("note.forecast_fallback") + " "
                     "missing, worse than the baseline, or incompatible.",
                     size=T.FONT_TINY, color=T.TEXT_TERTIARY),
@@ -167,13 +173,13 @@ def build_settings_view(page: ft.Page, navigate: Callable[[str], None]) -> ft.Co
     diagnostics_panel = section(
         t("panel.diagnostics"),
         ft.Column(spacing=T.GAP_SMALL, controls=[
-            _kv("Database file", str(Config.DB_PATH)),
-            _kv("Schema version", f"{get_schema_version(app.db)} (expected {SCHEMA_VERSION})"),
-            _kv("Environment", Config.ENV),
-            _kv("Active products", str(app.product_service.count_active())),
-            _kv("Stock movements", str(movement_count)),
-            _kv("Sales recorded", str(sales_count)),
-            _kv("TinyFish configured", "Yes" if Config.TINYFISH_API_KEY else "No (optional)"),
+            _kv(t("diag.database"), str(Config.DB_PATH)),
+            _kv(t("diag.schema"), t("diag.schema_value", actual=get_schema_version(app.db), expected=SCHEMA_VERSION)),
+            _kv(t("diag.environment"), Config.ENV),
+            _kv(t("diag.active_products"), str(app.product_service.count_active())),
+            _kv(t("diag.movements"), str(movement_count)),
+            _kv(t("diag.sales"), str(sales_count)),
+            _kv(t("diag.tinyfish"), t("common.yes") if Config.TINYFISH_API_KEY else "No (optional)"),
         ]),
         expand=True,
     )

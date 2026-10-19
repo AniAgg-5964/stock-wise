@@ -14,7 +14,7 @@ import flet as ft
 from app.bootstrap import app_context
 from app.config import Config
 from app.theme import StockWiseTheme as T
-from app.i18n import t
+from app.i18n import method_label, t
 from domain.exceptions import StockWiseError
 from ml.evaluate import format_wape
 from ui.components.chart import bar_chart, chart_legend
@@ -25,20 +25,17 @@ from ui.components.kpi_card import KpiMetric, kpi_strip
 from ui.components.layout import flow_row, page_header, scroll_column, section
 from ui.components.table import styled_table, text_cell
 
-_METHODS = [
-    ("auto", "Automatic (best available)"),
-    ("best", "Best baseline for this product"),
-    ("seasonal_naive", "Seasonal naive"),
-    ("moving_average", "7-day moving average"),
-    ("mean", "Average demand"),
-    ("xgboost", "XGBoost model (candidate)"),
-]
-
-_BASELINE_LABELS = {
-    "seasonal_naive": "Seasonal naive (same weekday last week)",
-    "moving_average": "7-day moving average",
-    "mean": "Average demand",
-}
+def _methods() -> list[tuple[str, str]]:
+    """Built per call: ``t()`` at import time would freeze the import-time
+    language, so a language switch would not reach this dropdown."""
+    return [
+        ("auto", t("method.auto")),
+        ("best", t("method.best")),
+        ("seasonal_naive", t("method.seasonal_naive")),
+        ("moving_average", t("method.moving_average")),
+        ("mean", t("method.mean")),
+        ("xgboost", t("method.xgboost")),
+    ]
 
 
 def _day_label(iso: str) -> str:
@@ -80,7 +77,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         value=str(Config.DEFAULT_FORECAST_HORIZON),
         width=150,
     )
-    method_dd = dropdown_field(t("field.method"), _METHODS, value="auto", width=260)
+    method_dd = dropdown_field(t("field.method"), _methods(), value="auto", width=260)
 
     def _horizon() -> int:
         try:
@@ -112,7 +109,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         model_metrics = status.get("metrics") or {}
         if model_metrics:
             rows.append(ft.DataRow(cells=[
-                text_cell("XGBoost", color=T.ACCENT),
+                text_cell(t("status.model"), color=T.ACCENT),
                 text_cell(f"{model_metrics.get('mae', 0):.2f}"),
                 text_cell(format_wape(model_metrics.get("wape"))),
                 text_cell(f"{model_metrics.get('bias', 0):+.2f}", color=T.TEXT_SECONDARY),
@@ -120,16 +117,17 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
             ]))
         for name, m in (status.get("baseline_metrics") or {}).items():
             rows.append(ft.DataRow(cells=[
-                text_cell(_BASELINE_LABELS.get(name, name)),
+                text_cell(method_label(name)),
                 text_cell(f"{m.get('mae', 0):.2f}"),
                 text_cell(format_wape(m.get("wape"))),
                 text_cell(f"{m.get('bias', 0):+.2f}", color=T.TEXT_SECONDARY),
                 text_cell(str(m.get("n", 0)), color=T.TEXT_SECONDARY),
             ]))
-        controls.append(styled_table([t("panel.model"), "MAE (units)", "WAPE", "Bias", "Days tested"], rows))
+        controls.append(styled_table([t("panel.model"), t("col.mae_units"), t("col.wape"), t("col.bias"), t("col.days_tested")], rows))
         if status.get("trained_at"):
             controls.append(ft.Text(
-                f"Trained {status['trained_at']} \u00b7 {status.get('version') or ''} \u00b7 {status.get('notes', '')}",
+                t("model.trained_on", when=status["trained_at"], model=status.get("version") or "",
+                  notes=status.get("notes", "")),
                 size=T.FONT_TINY, color=T.TEXT_TERTIARY,
             ))
         model_holder.controls = controls
@@ -167,24 +165,23 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
             notify_error(page, exc)
             return
 
-        method_text.value = (
-            f"{result.method_label} \u00b7 {result.observed_days} day(s) of history "
-            f"\u00b7 horizon {result.horizon} days"
-        )
+        method_text.value = t("model.summary", method=method_label(result.method_label),
+                                days=result.observed_days, horizon=result.horizon)
 
         # --- KPI cards ---
         kpi_holder.controls = [
             kpi_strip([
-                KpiMetric("Average daily demand", f"{result.average_daily_demand:g}",
-                          caption="units/day (last 28 days)", icon=ft.Icons.TIMELINE),
+                KpiMetric(t("metric.avg_daily_demand"), f"{result.average_daily_demand:g}",
+                          caption=t("cap.units_day"), icon=ft.Icons.TIMELINE),
                 KpiMetric(t("metric.forecast_next", days=len(result.points)), f"{result.total_qty:g}",
-                          caption="units expected", icon=ft.Icons.STACKED_LINE_CHART,
+                          caption=t("cap.units_expected"), icon=ft.Icons.STACKED_LINE_CHART,
                           accent=T.ACCENT),
-                KpiMetric("Observed sales days", str(result.observed_days),
-                          caption=f"minimum {Config.MIN_TRAINING_DAYS} for a model",
+                KpiMetric(t("metric.observed_days"), str(result.observed_days),
+                          caption=t("cap.minimum_days", days=Config.MIN_TRAINING_DAYS),
                           icon=ft.Icons.CALENDAR_MONTH_OUTLINED),
-                KpiMetric(t("field.method"), "Baseline" if result.is_baseline else "XGBoost",
-                          caption=result.method_label, icon=ft.Icons.MODEL_TRAINING_OUTLINED,
+                KpiMetric(t("metric.method"),
+                          t("status.baseline") if result.is_baseline else t("status.model"),
+                          caption=method_label(result.method_label), icon=ft.Icons.MODEL_TRAINING_OUTLINED,
                           accent=T.STATUS_INFO if result.is_baseline else T.STATUS_HEALTHY),
             ])
         ]
@@ -218,7 +215,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         backtests = app.forecast_service.backtest(pid, horizon=horizon)
         rows = [
             ft.DataRow(cells=[
-                text_cell(m.label),
+                text_cell(method_label(m.label)),
                 text_cell(f"{m.mae:.2f}"),
                 text_cell(format_wape(m.wape)),
                 text_cell(f"{m.bias:+.2f}", color=T.TEXT_SECONDARY),
@@ -228,7 +225,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         ]
         metrics_holder.controls = [
             styled_table(
-                [t("field.method"), "MAE (units)", "WAPE", "Bias", "Days tested"],
+                [t("field.method"), t("col.mae_units"), t("col.wape"), t("col.bias"), t("col.days_tested")],
                 rows,
                 empty_message=t("empty.no_history"),
             )
@@ -237,7 +234,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         # --- Forecast table ---
         has_bounds = any(p.lower_bound is not None for p in result.points)
         range_header = (
-            f"Likely range ({result.interval_level:.0%})"
+            t("forecast.range_header", level=result.interval_level)
             if has_bounds and result.interval_level
             else "Likely range"
         )
@@ -251,7 +248,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
                     color=T.TEXT_SECONDARY,
                 ))
             forecast_rows.append(ft.DataRow(cells=cells))
-        headers = ["Date", "Predicted units"] + ([range_header] if has_bounds else [])
+        headers = [t("col.date"), t("col.predicted_units")] + ([range_header] if has_bounds else [])
         table_holder.controls = [styled_table(headers, forecast_rows)]
         if has_bounds:
             notes.append(ft.Text(
@@ -273,8 +270,8 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
     )
 
     header = page_header(
-        "Forecasting",
-        "7-day demand forecast with transparent baseline accuracy",
+        t("nav.forecasting"),
+        t("dashboard.forecast_subtitle2"),
         actions=[
             ft.OutlinedButton(
                 content=t("action.rebuild"), icon=ft.Icons.REFRESH,
@@ -307,7 +304,7 @@ def build_forecasting_view(page: ft.Page, navigate: Callable[[str], None]) -> ft
         section(
             t("panel.model"),
             model_holder,
-            subtitle="XGBoost is adopted only when it beats the baseline on holdout data",
+            subtitle=t("panel.model_note"),
             actions=[ft.OutlinedButton(content=t("action.train_model"), icon=ft.Icons.MODEL_TRAINING,
                                        on_click=train_model)],
         ),
